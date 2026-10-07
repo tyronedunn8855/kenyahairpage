@@ -9,7 +9,7 @@ var CONFIG = {
   // Paste the link from the Stripe dashboard, e.g. 'https://buy.stripe.com/abc123'
   // In Stripe, set the link's "After payment" redirect to:
   //   https://YOUR-SITE.vercel.app/?deposit=paid#book
-  depositLink: '',
+  depositLink: 'https://buy.stripe.com/fZucN4bB49VfdFEcTd8Vi00',
   deposit: 15,
 
   // Booking calendar. Days: 0 = Sunday ... 6 = Saturday.
