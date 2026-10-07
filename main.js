@@ -20,19 +20,42 @@ var CONFIG = {
 };
 
 var SERVICES = [
-  { id: 'knotless', name: 'Knotless', desc: 'Lightweight, no-tension knotless braids.', long: true, options: [
+  { id: 'knotless', img: 'img/knotless-1.jpg', pos: 'center 78%', name: 'Knotless', desc: 'Lightweight, no-tension knotless braids.', long: true, options: [
     { n: 'Extra small', p: 260 }, { n: 'Small', p: 220 }, { n: 'Medium', p: 180 }, { n: 'Large', p: 130 } ] },
-  { id: 'fulani', name: 'Fulani', desc: 'Fulani braids with your choice of size.', long: true, options: [
+  { id: 'fulani', img: 'img/fulani-1.jpg', pos: 'center 64%', name: 'Fulani', desc: 'Fulani braids with your choice of size.', long: true, options: [
     { n: 'Small', p: 210 }, { n: 'Medium', p: 180 }, { n: 'Large', p: 150 } ] },
-  { id: 'feedins', name: 'Feed-ins', desc: 'Sleek feed-in braids, priced by count.', long: true, options: [
+  { id: 'feedins', img: 'img/braids-7.jpg', pos: 'center 40%', name: 'Feed-ins', desc: 'Sleek feed-in braids, priced by count.', long: true, options: [
     { n: '4 braids', p: 40 }, { n: '6 braids', p: 60 }, { n: '8 braids', p: 80 }, { n: '10+ braids', p: 90, plus: true } ] },
-  { id: 'quickweave', name: 'Quick weaves', desc: 'Quick weave installs and ponytails.', options: [
+  { id: 'quickweave', img: 'img/quickweave-2.jpg', pos: 'center 72%', name: 'Quick weaves', desc: 'Quick weave installs and ponytails.', options: [
     { n: 'Quick weave', p: 85 }, { n: 'Quick weave ponytail', p: 70 }, { n: 'Quick weave with braids', p: 100 } ] },
-  { id: 'male', name: "Men's styles", desc: 'Cornrows, twists, retwists, and locs.', options: [
+  { id: 'male', img: 'img/braids-1.jpg', pos: 'center 66%', name: "Men's styles", desc: 'Cornrows, twists, retwists, and locs.', options: [
     { n: 'Cornrows', p: 55, design: true }, { n: 'Twists', p: 60 }, { n: 'Retwists', p: 65 },
     { n: 'Retwists + style', p: 75 }, { n: 'Starter locs', p: 90 }, { n: 'Freeform transformation', p: 85 } ] },
-  { id: 'kids', name: 'Kids styles', desc: 'Styles for the little ones, priced by age.', options: [
+  { id: 'kids', img: 'img/kids-1.jpg', pos: 'center 42%', name: 'Kids styles', desc: 'Styles for the little ones, priced by age.', options: [
     { n: 'Ages 3 and under', p: 40 }, { n: 'Ages 4 to 10', p: 55 }, { n: 'Ages 11 to 14', p: 70, plus: true } ] }
+];
+
+
+/* Gallery photos: file, filter tag, caption, which style "Book this" opens, layout */
+var GALLERY = [
+  { f: 'knotless-2', t: 'Knotless', c: 'Knotless braids', b: 'knotless', s: 'tall arch-top' },
+  { f: 'braids-4', t: 'Braids', c: 'Heart design cornrows', b: 'male' },
+  { f: 'fulani-1', t: 'Fulani', c: 'Fulani braids with curls', b: 'fulani' },
+  { f: 'locs-1', t: 'Locs', c: 'Loc retwist', b: 'male', s: 'tall' },
+  { f: 'kids-2', t: 'Kids', c: 'Kids braids with bows', b: 'kids', s: 'arch-top' },
+  { f: 'braids-7', t: 'Braids', c: 'Zigzag stitch braids', b: 'feedins' },
+  { f: 'quickweave-2', t: 'Quick weaves', c: 'Quick weave', b: 'quickweave', s: 'arch-top' },
+  { f: 'braids-2', t: 'Braids', c: 'Zigzag cornrows', b: 'male' },
+  { f: 'knotless-1', t: 'Knotless', c: 'Small knotless braids', b: 'knotless' },
+  { f: 'locs-2', t: 'Locs', c: 'Starter locs', b: 'male' },
+  { f: 'kids-1', t: 'Kids', c: 'Kids braids with beads', b: 'kids', s: 'tall arch-top' },
+  { f: 'braids-5', t: 'Braids', c: 'Stitch braids', b: 'male' },
+  { f: 'quickweave-1', t: 'Quick weaves', c: 'Quick weave with braids', b: 'quickweave' },
+  { f: 'braids-locs-1', t: 'Locs', c: 'Twists and cornrows', b: 'male' },
+  { f: 'locs-3', t: 'Locs', c: 'Loc style', b: 'male', s: 'arch-top' },
+  { f: 'braids-1', t: 'Braids', c: 'Stitch cornrows', b: 'male' },
+  { f: 'kids-3', t: 'Kids', c: 'Kids cornrows', b: 'kids' },
+  { f: 'braids-6', t: 'Braids', c: 'Wavy cornrows', b: 'kids' }
 ];
 
 /* ════════════════════════════════════════════════════════════ */
@@ -93,7 +116,7 @@ var SERVICES = [
     }).join('');
     var card = document.createElement('article');
     card.className = 'pcard';
-    card.innerHTML = '<div class="pcard-top"><h3>' + s.name + '</h3><span class="from">From ' + money(low) + '</span></div>' +
+    card.innerHTML = (s.img ? '<div class="pcard-img"><img style="object-position:' + (s.pos || 'center') + '" src="' + s.img + '" alt="' + s.name + ' by ken.didit" loading="lazy"></div>' : '') + '<div class="pcard-top"><h3>' + s.name + '</h3><span class="from">From ' + money(low) + '</span></div>' +
       '<p class="desc">' + s.desc + '</p>' + rows +
       '<div class="pbook"><button class="btn btn-soft btn-sm btn-wide" data-cat="' + s.id + '"><span class="btn-t">Book ' + s.name.toLowerCase() + '</span></button></div>';
     grid.appendChild(card);
@@ -105,6 +128,61 @@ var SERVICES = [
     state.longHair = false; state.design = false;
     renderService(); update();
     goTo('#book');
+  });
+
+
+  /* ── gallery ── */
+  var TAGS = ['All', 'Knotless', 'Braids', 'Fulani', 'Locs', 'Quick weaves', 'Kids'];
+  var gal = $('#gallery'), gf = $('#g-filters'), curTag = 'All', lbIdx = 0;
+  gf.innerHTML = TAGS.map(function (t) { return '<button class="chip" role="tab" aria-checked="' + (t === 'All') + '" data-tag="' + t + '">' + t + '</button>'; }).join('');
+  gal.innerHTML = GALLERY.map(function (g, i) {
+    return '<button class="g-item ' + (g.s || '') + '" data-i="' + i + '" data-tag="' + g.t + '" aria-label="View ' + g.c + '">' +
+      '<img src="img/' + g.f + '.jpg" alt="' + g.c + ' by ken.didit" loading="lazy"><span class="g-tag">' + g.t + '</span></button>';
+  }).join('');
+  function visible() { return GALLERY.map(function (g, i) { return i; }).filter(function (i) { return curTag === 'All' || GALLERY[i].t === curTag; }); }
+  gf.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-tag]'); if (!b) return;
+    curTag = b.dataset.tag;
+    $$('.chip', gf).forEach(function (c) { c.setAttribute('aria-checked', c === b); });
+    var items = $$('.g-item', gal);
+    items.forEach(function (it) {
+      var show = curTag === 'All' || it.dataset.tag === curTag;
+      it.classList.toggle('hide', !show);
+      // filtered view: drop special sizing so the grid stays tidy
+      it.style.gridRow = curTag === 'All' ? '' : 'auto';
+      it.style.aspectRatio = curTag === 'All' ? '' : '3/4';
+    });
+    if (window.gsap && !reduced) gsap.fromTo(items.filter(function (it) { return !it.classList.contains('hide'); }), { opacity: 0, y: 24, scale: .96 }, { opacity: 1, y: 0, scale: 1, duration: .55, stagger: .04, ease: 'power3.out' });
+    if (window.ScrollTrigger) ScrollTrigger.refresh();
+  });
+
+  var lb = $('#lb');
+  function openLb(i) {
+    lbIdx = i; var g = GALLERY[i];
+    $('#lb-img').src = 'img/' + g.f + '.jpg'; $('#lb-img').alt = g.c + ' by ken.didit';
+    $('#lb-cap').textContent = g.c;
+    $('#lb-book').dataset.cat = g.b;
+    lb.classList.add('open'); lb.setAttribute('aria-hidden', 'false');
+    if (lenis) lenis.stop();
+    $('#lb-x').focus();
+  }
+  function closeLb() { lb.classList.remove('open'); lb.setAttribute('aria-hidden', 'true'); if (lenis) lenis.start(); }
+  function step(d) { var v = visible(), p = v.indexOf(lbIdx); openLb(v[(p + d + v.length) % v.length]); }
+  gal.addEventListener('click', function (e) { var b = e.target.closest('.g-item'); if (b) openLb(+b.dataset.i); });
+  $('#lb-x').addEventListener('click', closeLb);
+  $('#lb-p').addEventListener('click', function () { step(-1); });
+  $('#lb-n').addEventListener('click', function () { step(1); });
+  lb.addEventListener('click', function (e) { if (e.target === lb) closeLb(); });
+  document.addEventListener('keydown', function (e) {
+    if (!lb.classList.contains('open')) return;
+    if (e.key === 'Escape') closeLb();
+    if (e.key === 'ArrowLeft') step(-1);
+    if (e.key === 'ArrowRight') step(1);
+  });
+  $('#lb-book').addEventListener('click', function (e) {
+    e.preventDefault(); e.stopPropagation();
+    state.cat = this.dataset.cat; state.opt = null; state.longHair = false; state.design = false;
+    closeLb(); renderService(); update(); goTo('#book');
   });
 
   /* ── step 1: service ── */
@@ -348,6 +426,7 @@ var SERVICES = [
   /* hidden starting states */
   gsap.set('.rv', { opacity: 0, y: 36 });
   gsap.set('.pcard', { opacity: 0, y: 50 });
+  gsap.set('.g-item', { opacity: 0, y: 60 });
   [ldPaths, divPaths].forEach(function (ps) {
     ps.forEach(function (p) { var L = p.getTotalLength(); p.style.strokeDasharray = L; p.style.strokeDashoffset = L; });
   });
@@ -385,6 +464,7 @@ var SERVICES = [
   });
   /* reveals */
   $$('.rv').forEach(function (el) { gsap.to(el, { opacity: 1, y: 0, duration: 1, ease: 'power3.out', scrollTrigger: { trigger: el, start: 'top 90%' } }); });
+  ScrollTrigger.batch('.g-item', { start: 'top 92%', onEnter: function (b) { gsap.to(b, { opacity: 1, y: 0, duration: 1, ease: 'power3.out', stagger: .08 }); } });
   ScrollTrigger.batch('.pcard', { start: 'top 90%', onEnter: function (b) { gsap.to(b, { opacity: 1, y: 0, duration: 1, ease: 'power3.out', stagger: .1 }); } });
 
   /* braid divider draws as you scroll */

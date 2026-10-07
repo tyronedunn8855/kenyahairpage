@@ -58,8 +58,8 @@
     </ul>
   </div>
   <div class="hero-art">
-    <div class="arch arch-main" id="arch-main"><div class="ph"><span>Photo coming soon</span></div></div>
-    <div class="arch-sm"><div class="ph ph-alt"><span>Photo</span></div></div>
+    <div class="arch arch-main" id="arch-main"><img class="ph" src="img/knotless-2.jpg" alt="Knotless braids by ken.didit, viewed from the back"></div>
+    <div class="arch-sm"><img class="ph" src="img/kids-2.jpg" alt="Kids braided style with purple bows and star beads"></div>
     <svg class="spin-badge" viewBox="0 0 200 200" aria-hidden="true">
       <defs><path id="circ" d="M100,100 m-74,0 a74,74 0 1,1 148,0 a74,74 0 1,1 -148,0"/></defs>
       <text><textPath href="#circ" textLength="452" lengthAdjust="spacing">BOOK NOW ✦ KEN.DIDIT ✦ BOOK NOW ✦ KEN.DIDIT ✦</textPath></text>
@@ -98,14 +98,10 @@
   <div class="wrap">
     <div class="sec-head">
       <h2 class="split">The <em>work</em></h2>
-      <p class="sec-note rv">Fresh installs, straight from the chair. More photos coming soon on <a href="https://instagram.com/doitfortae_" target="_blank" rel="noopener">@doitfortae_</a>.</p>
+      <p class="sec-note rv">Fresh installs, straight from the chair. Tap any photo to see it up close, or see more on <a href="https://instagram.com/doitfortae_" target="_blank" rel="noopener">@doitfortae_</a>.</p>
     </div>
-    <div class="work-grid">
-      <figure class="w w1" data-speed="-6"><div class="arch"><div class="ph"><span>Knotless</span></div></div><figcaption>Knotless braids</figcaption></figure>
-      <figure class="w w2" data-speed="8"><div class="arch"><div class="ph ph-alt"><span>Fulani</span></div></div><figcaption>Fulani braids</figcaption></figure>
-      <figure class="w w3" data-speed="-10"><div class="arch"><div class="ph"><span>Quick weave</span></div></div><figcaption>Quick weave</figcaption></figure>
-      <figure class="w w4" data-speed="6"><div class="arch"><div class="ph ph-alt"><span>Men's</span></div></div><figcaption>Men's twists</figcaption></figure>
-    </div>
+    <div class="g-filters" id="g-filters" role="tablist" aria-label="Filter photos"></div>
+    <div class="gallery" id="gallery"></div>
   </div>
 </section>
 
@@ -240,6 +236,12 @@
   </div>
 </footer>
 
+<div class="lb" id="lb" aria-hidden="true" role="dialog" aria-label="Photo viewer">
+  <button class="lb-btn lb-x" id="lb-x" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <button class="lb-btn lb-p" id="lb-p" aria-label="Previous photo"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+  <button class="lb-btn lb-n" id="lb-n" aria-label="Next photo"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+  <figure><img id="lb-img" src="" alt=""><figcaption><span id="lb-cap"></span><a class="btn btn-primary btn-sm" id="lb-book" href="#book"><span class="btn-t">Book this style</span></a></figcaption></figure>
+</div>
 <div class="toast" id="toast" role="status"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.14/dist/lenis.min.js"></script>
