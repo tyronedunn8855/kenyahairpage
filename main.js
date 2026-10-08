@@ -116,7 +116,7 @@ var GALLERY = [
     }).join('');
     var card = document.createElement('article');
     card.className = 'pcat'; card.id = 'p-' + s.id; card.dataset.i = si;
-    card.innerHTML = '<div class="pcat-img"><img style="object-position:' + (s.pos || 'center') + '" src="' + s.img + '" alt="' + s.name + ' by ken.didit" loading="lazy"></div>' +
+    card.innerHTML = '<div class="pcat-img"><img src="' + s.img + '" alt="' + s.name + ' by ken.didit" loading="lazy"></div>' +
       '<div class="pcat-top"><span class="mono pcat-n">' + String(si + 1).padStart(2, '0') + '</span><h3>' + s.name + '</h3><span class="from">from ' + money(low(s)) + '</span></div>' +
       '<p class="desc">' + s.desc + '</p>' + rows +
       '<div class="pbook"><button class="tlink" data-cat="' + s.id + '">Book ' + s.name.toLowerCase() + '</button></div>';
@@ -133,7 +133,7 @@ var GALLERY = [
 
   /* sticky photo beside the rate card follows the category in view */
   var frame = $('#rp-frame'), rpCap = $('#rp-cap');
-  frame.innerHTML = SERVICES.map(function (s, i) { return '<img src="' + s.img + '" style="object-position:' + (s.pos || 'center') + '" alt="" ' + (i ? 'loading="lazy"' : '') + (i ? '' : ' class="on"') + '>'; }).join('');
+  frame.innerHTML = SERVICES.map(function (s, i) { return '<img src="' + s.img + '" alt="" ' + (i ? 'loading="lazy"' : '') + (i ? '' : ' class="on"') + '>'; }).join('');
   function showCat(i) {
     $$('img', frame).forEach(function (im, k) { im.classList.toggle('on', k === i); });
     rpCap.innerHTML = CR + SERVICES[i].name;
