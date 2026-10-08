@@ -21,18 +21,18 @@ var CONFIG = {
 
 var SERVICES = [
   { id: 'knotless', img: 'img/knotless-1.jpg', pos: 'center 78%', name: 'Knotless', desc: 'Lightweight, no-tension knotless braids.', long: true, options: [
-    { n: 'Extra small', p: 260 }, { n: 'Small', p: 220 }, { n: 'Medium', p: 180 }, { n: 'Large', p: 130 } ] },
+    { n: 'Extra small', p: 260, d: '12+ hrs' }, { n: 'Small', p: 220, d: '8 hrs' }, { n: 'Medium', p: 180, d: '5 hrs' }, { n: 'Large', p: 130, d: '3 hrs 30 min' } ] },
   { id: 'fulani', img: 'img/fulani-1.jpg', pos: 'center 64%', name: 'Fulani', desc: 'Fulani braids with your choice of size.', long: true, options: [
-    { n: 'Small', p: 210 }, { n: 'Medium', p: 180 }, { n: 'Large', p: 150 } ] },
+    { n: 'Small', p: 210, d: '6 hrs 30 min' }, { n: 'Medium', p: 180, d: '5 hrs' }, { n: 'Large', p: 150, d: '4 hrs' } ] },
   { id: 'feedins', img: 'img/braids-7.jpg', pos: 'center 40%', name: 'Feed-ins', desc: 'Sleek feed-in braids, priced by count.', long: true, options: [
-    { n: '4 braids', p: 40 }, { n: '6 braids', p: 60 }, { n: '8 braids', p: 80 }, { n: '10+ braids', p: 90, plus: true } ] },
+    { n: '4 braids', p: 40, d: '1 hr 15 min' }, { n: '6 braids', p: 60, d: '1 hr 30 min' }, { n: '8 braids', p: 80, d: '2 hrs' }, { n: '10+ braids', p: 90, plus: true, d: '3+ hrs' } ] },
   { id: 'quickweave', img: 'img/quickweave-2.jpg', pos: 'center 72%', name: 'Quick weaves', desc: 'Quick weave installs and ponytails.', options: [
-    { n: 'Quick weave', p: 85 }, { n: 'Quick weave ponytail', p: 70 }, { n: 'Quick weave with braids', p: 100 } ] },
+    { n: 'Quick weave', p: 85, d: '3 hrs' }, { n: 'Quick weave ponytail', p: 70, d: '4 hrs' }, { n: 'Quick weave with braids', p: 100, d: '4 hrs' } ] },
   { id: 'male', img: 'img/braids-1.jpg', pos: 'center 66%', name: "Men's styles", desc: 'Cornrows, twists, retwists, and locs.', options: [
-    { n: 'Cornrows', p: 55, design: true }, { n: 'Twists', p: 60 }, { n: 'Retwists', p: 65 },
-    { n: 'Retwists + style', p: 75 }, { n: 'Starter locs', p: 90 }, { n: 'Freeform transformation', p: 85 } ] },
+    { n: 'Cornrows', p: 55, design: true, d: '1 hr 30 min', dd: '2 hrs' }, { n: 'Twists', p: 60, d: '2 hrs 30 min' }, { n: 'Retwists', p: 65, d: '2 hrs 30 min' },
+    { n: 'Retwists + style', p: 75, d: '3 hrs 30 min' }, { n: 'Starter locs', p: 90, d: '2 hrs' }, { n: 'Freeform transformation', p: 85, d: '3 hrs' } ] },
   { id: 'kids', img: 'img/kids-1.jpg', pos: 'center 42%', name: 'Kids styles', desc: 'Styles for the little ones, priced by age.', options: [
-    { n: 'Ages 3 and under', p: 40 }, { n: 'Ages 4 to 10', p: 55 }, { n: 'Ages 11 to 14', p: 70, plus: true } ] }
+    { n: 'Ages 3 and under', p: 40, d: '3 hrs' }, { n: 'Ages 4 to 10', p: 55, d: '2 hrs' }, { n: 'Ages 11 to 14', p: 70, plus: true, d: '3+ hrs' } ] }
 ];
 
 
@@ -66,6 +66,7 @@ var GALLERY = [
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var money = function (n) { return '$' + n; };
+  var CLOCK = '<svg class="clk" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
 
   var state = { cat: null, opt: null, longHair: false, design: false, date: null, time: null, paid: false };
 
@@ -112,7 +113,7 @@ var GALLERY = [
     var low = Math.min.apply(null, s.options.map(function (o) { return o.p; }));
     var rows = s.options.map(function (o, i) {
       return '<button class="prow" data-cat="' + s.id + '" data-opt="' + i + '"><span class="pn">' + o.n +
-        (o.design ? '<small>Design +$10</small>' : '') + '</span><span class="pd"></span><span class="pp">' + money(o.p) + (o.plus ? '+' : '') + '</span></button>';
+        '<small class="dur">' + CLOCK + (o.d || '') + (o.design ? ' · Design +$10 (' + o.dd + ')' : '') + '</small>' + '</span><span class="pd"></span><span class="pp">' + money(o.p) + (o.plus ? '+' : '') + '</span></button>';
     }).join('');
     var card = document.createElement('article');
     card.className = 'pcard';
@@ -193,7 +194,7 @@ var GALLERY = [
     }).join('');
     var s = svc();
     $('#opt-chips').innerHTML = s ? s.options.map(function (o, i) {
-      return '<button class="chip" role="radio" aria-checked="' + (state.opt === i) + '" data-o="' + i + '">' + o.n + '<span class="cp">' + money(o.p) + (o.plus ? '+' : '') + '</span></button>';
+      return '<button class="chip" role="radio" aria-checked="' + (state.opt === i) + '" data-o="' + i + '">' + o.n + '<span class="cp">' + money(o.p) + (o.plus ? '+' : '') + '</span><span class="cd">' + o.d + '</span></button>';
     }).join('') : '';
     var add = '';
     if (s && s.long) add += '<label class="check"><input type="checkbox" id="ad-long"' + (state.longHair ? ' checked' : '') + '>Length past butt length<b>+$15</b></label>';
@@ -270,7 +271,7 @@ var GALLERY = [
     return { base: o.p, plus: !!o.plus, sum: o.p + (state.longHair ? 15 : 0) + (state.design ? 10 : 0) };
   }
   function setDD(id, text) { var el = $(id); el.textContent = text || el.dataset.empty; el.classList.toggle('empty', !text); }
-  ['#sum-style', '#sum-date', '#sum-time'].forEach(function (id) { $(id).dataset.empty = 'Not chosen yet'; });
+  ['#sum-style', '#sum-date', '#sum-time', '#sum-len'].forEach(function (id) { $(id).dataset.empty = 'Not chosen yet'; });
   $('#sum-add').dataset.empty = 'None';
 
   function update() {
@@ -280,6 +281,7 @@ var GALLERY = [
     setDD('#sum-add', adds.join(', '));
     setDD('#sum-date', state.date ? fmtDate(state.date) : '');
     setDD('#sum-time', state.time || '');
+    setDD('#sum-len', s && state.opt != null ? 'About ' + (state.design ? s.options[state.opt].dd : s.options[state.opt].d) : '');
     var tot = t ? t.sum : 0;
     animNum('#sum-total', tot, t && t.plus ? '+' : '');
     animNum('#sum-due', Math.max(0, tot - CONFIG.deposit), t && t.plus ? '+' : '');
@@ -328,6 +330,7 @@ var GALLERY = [
       adds.length ? 'Add-ons: ' + adds.join(', ') : null,
       'Date: ' + fmtDate(state.date) + ' ' + state.date.getFullYear(),
       'Time: ' + state.time,
+      'Takes about: ' + (state.design ? o.dd : o.d),
       'Estimated total: ' + money(t.sum) + (t.plus ? '+' : ''),
       '',
       'Name: ' + $('#f-name').value.trim(),
