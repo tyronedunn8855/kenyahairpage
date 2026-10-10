@@ -4,6 +4,9 @@
    Never paste the service_role key here or anywhere on the site.
    While these are empty, the calendar keeps reading the Google Sheet and the panel says it isn't connected. */
 window.KD_SUPABASE = {
-  url: 'https://mktcajxidyxvfxzrdkko.supabase.co',
-  anonKey: 'sb_publishable_MPXmajP00xipObLQvOPZfw_ORMo3Sg7'
+  // Turned on once her current times are copied in (supabase/copy-current-times.sql):
+  //   url: 'https://mktcajxidyxvfxzrdkko.supabase.co'
+  //   anonKey: 'sb_publishable_MPXmajP00xipObLQvOPZfw_ORMo3Sg7'
+  url: '',
+  anonKey: ''
 };
