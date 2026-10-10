@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /admin/
 
-Sitemap: https://kenyastyles.vercel.app/sitemap.xml
+Sitemap: https://kendidit.vercel.app/sitemap.xml
