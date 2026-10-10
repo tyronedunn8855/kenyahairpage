@@ -12,7 +12,12 @@ var CONFIG = {
   depositLink: 'https://buy.stripe.com/fZucN4bB49VfdFEcTd8Vi00',
   deposit: 15,
 
-  // BOOKING SCHEDULE (from Kenya, Oct 9 2026).
+  // LIVE SCHEDULE: the booking calendar reads Kenya's Google Sheet
+  // "ken.didit booking schedule" (tab "Schedule"). She edits the sheet, the
+  // site updates. The sheet must be shared as "Anyone with the link: Viewer".
+  scheduleSheetId: '1mRGWAifZ88s07uuNx30Xlp8xKt3ZH203RYcCWtnC6gU',
+
+  // BACKUP SCHEDULE: used only if the sheet can't be reached.
   // Only the dates listed here can be booked. Every other day shows as closed.
   // To open a day, add a line: 'YYYY-MM-DD': ['time', 'time'],
   // To close a day, delete its line.
@@ -283,6 +288,57 @@ var GALLERY = [
       return '<button class="chip slot" role="radio" aria-checked="' + (state.time === t) + '" data-t="' + t + '">' + t + '</button>';
     }).join('');
   }
+  /* live schedule from Kenya's Google Sheet (JSONP, so no CORS needed) */
+  function normTime(x) {
+    var m = String(x || '').trim().toUpperCase().match(/^(\d{1,2})(?::(\d{2}))?(?::\d{2})?\s*([AP])\.?M?\.?$/);
+    if (!m) return null;
+    return (+m[1]) + ':' + (m[2] || '00') + ' ' + m[3] + 'M';
+  }
+  function cellTime(c) {
+    if (!c) return null;
+    if (c.f) return normTime(c.f);
+    if (Array.isArray(c.v)) { var h = c.v[0], mi = c.v[1] || 0; return normTime(((h + 11) % 12 + 1) + ':' + String(mi).padStart(2, '0') + (h < 12 ? ' AM' : ' PM')); }
+    return normTime(c.v);
+  }
+  function cellDate(c) {
+    if (!c || c.v == null) return null;
+    var m = String(c.v).match(/Date\((\d+),(\d+),(\d+)/);
+    if (m) return new Date(+m[1], +m[2], +m[3]);
+    var d = new Date(c.f || c.v); return isNaN(d) ? null : d;
+  }
+  function loadSheet() {
+    if (!CONFIG.scheduleSheetId) return;
+    var cb = '__kenSched' + Date.now(), done = false, tag = document.createElement('script');
+    function finish() { done = true; try { delete window[cb]; } catch (e) { window[cb] = undefined; } tag.remove(); }
+    window[cb] = function (res) {
+      if (done) return; finish();
+      try {
+        if (!res || res.status === 'error' || !res.table) return;
+        var sched = {};
+        res.table.rows.forEach(function (r) {
+          var c = r.c || [], d = cellDate(c[0]); if (!d) return;
+          var ts = [c[2], c[3], c[4], c[5]].map(cellTime).filter(Boolean);
+          if (!ts.length) return;
+          var k = iso(d); sched[k] = (sched[k] || []).concat(ts);
+        });
+        Object.keys(sched).forEach(function (k) {
+          sched[k] = sched[k].filter(function (t, i, a) { return a.indexOf(t) === i; }).sort(function (a, b) { return toMin(a) - toMin(b); });
+        });
+        CONFIG.schedule = sched;
+        if (state.date && !isOpen(state.date)) { state.date = null; state.time = null; }
+        if (state.time && (sched[iso(state.date)] || []).indexOf(state.time) < 0) state.time = null;
+        renderCal(); renderSlots(); update();
+      } catch (e) { /* keep backup schedule */ }
+    };
+    tag.onerror = function () { if (!done) finish(); };
+    setTimeout(function () { if (!done) finish(); }, 8000);
+    tag.src = 'https://docs.google.com/spreadsheets/d/' + CONFIG.scheduleSheetId +
+      '/gviz/tq?sheet=Schedule&range=A5:F400&headers=0&tqx=out:json;responseHandler:' + cb;
+    document.head.appendChild(tag);
+  }
+  function toMin(t) { var m = t.match(/(\d+):(\d+) ([AP])M/); return (+m[1] % 12) * 60 + (+m[2]) + (m[3] === 'P' ? 720 : 0); }
+  loadSheet();
+
   $('#cal-prev').addEventListener('click', function () { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); renderCal(); calAnim(-1); });
   $('#cal-next').addEventListener('click', function () { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); renderCal(); calAnim(1); });
   function calAnim(dir) { if (hasGsap && !reduced) gsap.from('#cal-grid .day:not(.blank)', { opacity: 0, x: 10 * dir, duration: .35, stagger: .006, ease: 'power2.out' }); }
