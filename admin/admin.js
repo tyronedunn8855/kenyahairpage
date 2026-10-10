@@ -69,7 +69,7 @@
     if (e && e.status >= 500) return 'The booking database had a problem. Nothing was saved. Try again in a minute.';
     if (code === '23505') return 'You already have a time that starts then on this day.';
     if (code === '23514') return 'The end time has to be after the start time.';
-    if (code === '42501' || /row-level security|permission denied/i.test(msg)) return 'This account is not allowed to change hours. Nothing was saved.';
+    if (code === '42501' || /row-level security|permission denied/i.test(msg)) return 'This account is not allowed to make changes. Nothing was saved.';
     if (code === 'PGRST301' || /jwt|expired|not authenticated/i.test(msg)) return 'Your sign-in ended. Sign in again. Nothing was saved.';
     if (/fetch|network|load failed/i.test(msg)) return 'Could not reach the server. Check your connection. Nothing was saved.';
     return 'Not saved: ' + msg;
@@ -438,8 +438,8 @@
     }).catch(function (e) { if (e && e.message !== 'busy' && stEl.className.indexOf('error') < 0) status('error', friendly(e)); });
   });
 
-  /* ═══ Tabs: Hours, Prices, Photos ═══ */
-  var TABS = ['hours', 'prices', 'photos'], tabLoaded = {};
+  /* ═══ Tabs: Requests, Hours, Prices, Photos, Info ═══ */
+  var TABS = ['requests', 'hours', 'prices', 'photos', 'info'], tabLoaded = {};
   function showTab(name, focus) {
     TABS.forEach(function (t) {
       var b = $('#tab-' + t), on = t === name;
@@ -452,6 +452,8 @@
     try { sessionStorage.setItem('kd-admin-tab', name); } catch (e) {}
     if (name === 'prices' && !tabLoaded.prices) loadPrices();
     if (name === 'photos' && !tabLoaded.photos) loadPhotos();
+    if (name === 'requests') loadRequests();
+    if (name === 'info' && !tabLoaded.info) loadInfo();
   }
   TABS.forEach(function (t, i) {
     var b = $('#tab-' + t);
@@ -462,8 +464,9 @@
     });
   });
   function startTabs() {
-    var t = 'hours'; try { t = sessionStorage.getItem('kd-admin-tab') || 'hours'; } catch (e) {}
-    showTab(TABS.indexOf(t) > -1 ? t : 'hours');
+    var t = 'requests'; try { t = sessionStorage.getItem('kd-admin-tab') || 'requests'; } catch (e) {}
+    showTab(TABS.indexOf(t) > -1 ? t : 'requests');
+    if (t !== 'requests') loadRequests(); // keeps the New count on the tab current
   }
 
   // Text that goes on her public site: no markup characters, same rule as the database
@@ -599,6 +602,276 @@
     rows.forEach(function (r) { var k = prices.map(function (x) { return x.id; }).indexOf(r.id); if (k > -1) prices[k] = r; else prices.push(r); });
     renderPrices();
   }
+
+  /* ═══ Requests ═══
+     Clients send a request from the booking page (submit_booking_request in requests-faq.sql).
+     Confirm marks the request confirmed and the matching open time booked, so nobody else can pick it. */
+  var reqs = [], reqFilter = 'new', reqSeq = 0, openReq = null;
+  var IOS = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent);
+  function loadRequests() {
+    var seq = ++reqSeq;
+    $('#req-err').hidden = true;
+    return sb.from('booking_requests').select('*').order('appt_date').order('appt_time').limit(500).then(function (res) {
+      if (seq !== reqSeq) return;
+      if (res.error) throw res.error;
+      reqs = res.data || []; tabLoaded.requests = true;
+      $('#reqs').removeAttribute('aria-busy');
+      renderRequests();
+    }).catch(function (e) {
+      if (seq !== reqSeq) return;
+      $('#req-err-text').textContent = 'Couldn\'t load your requests. ' + friendly(e).replace(' Nothing was saved.', '');
+      $('#req-err').hidden = false;
+      if (!reqs.length) $('#reqs').replaceChildren();
+    });
+  }
+  $('#req-retry').addEventListener('click', loadRequests);
+  $('#req-refresh').addEventListener('click', function () {
+    var b = this; b.disabled = true; b.textContent = 'Checking';
+    loadRequests().finally(function () { b.disabled = false; b.textContent = 'Check for new requests'; });
+  });
+  // Coming back to the panel from Messages or Calendar: check for new ones
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && tabLoaded.requests && !$('#v-panel').hidden) loadRequests(); });
+
+  function isPast(r) { return r.appt_date < TODAY; }
+  function bucket(r) { return r.status === 'new' && !isPast(r) ? 'new' : r.status === 'confirmed' && !isPast(r) ? 'confirmed' : 'past'; }
+  function phonePretty(d) { return '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6); }
+  function durText(m) { var h = Math.floor(m / 60), mm = m % 60; return (h ? h + ' hr' + (h > 1 ? 's' : '') : '') + (h && mm ? ' ' : '') + (mm ? mm + ' min' : ''); }
+  function ago(ts) {
+    var m = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 60000));
+    return m < 2 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' hr ago' : Math.round(m / 1440) + ' day' + (Math.round(m / 1440) > 1 ? 's' : '') + ' ago';
+  }
+  function when(r) { return fmtDay(parse(r.appt_date)) + ' at ' + fmtTime(r.appt_time); }
+  function firstName(r) { return r.name.split(' ')[0]; }
+  function smsHref(r, body) { return 'sms:+1' + r.phone + (body ? (IOS ? '&' : '?') + 'body=' + encodeURIComponent(body) : ''); }
+  function confirmText(r) {
+    var d = parse(r.appt_date);
+    return 'Hi ' + firstName(r) + ', this is Kenya with ken.didit. You are confirmed for ' + r.style + ' on ' + DAYS[d.getDay()] + ', ' + MONTHS[d.getMonth()] + ' ' + d.getDate() + ' at ' + fmtTime(r.appt_time) + '. I will send the address the day before.';
+  }
+  function icsHref(r) {
+    var q = new URLSearchParams({ id: r.id, date: r.appt_date, time: hm(r.appt_time), dur: r.duration_min, name: r.name, style: r.style, addons: r.addons || '',
+      total: r.total, plus: r.total_plus ? '1' : '0', phone: r.phone, paid: r.paid_said ? '1' : '0', notes: r.notes || '' });
+    return '/api/ics?' + q.toString();
+  }
+  var PILL = { new: 'New', confirmed: 'Confirmed', done: 'Done', declined: 'Declined' };
+  function renderRequests() {
+    var n = { new: 0, confirmed: 0, past: 0 };
+    reqs.forEach(function (r) { n[bucket(r)]++; });
+    $('#n-new').textContent = n.new; $('#n-confirmed').textContent = n.confirmed;
+    var tn = $('#tab-n'); tn.textContent = n.new; tn.hidden = !n.new;
+    $('#tab-requests').setAttribute('aria-label', 'Requests' + (n.new ? ', ' + n.new + ' new' : ''));
+    document.querySelectorAll('.seg button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.f === reqFilter ? 'true' : 'false'); });
+    var list = reqs.filter(function (r) { return bucket(r) === reqFilter; });
+    if (reqFilter === 'past') list = list.reverse().slice(0, 60);
+    var box = $('#reqs'), frag = document.createDocumentFragment();
+    if (!list.length) {
+      var em = el('div', 'card rq-empty');
+      em.appendChild(el('h2', null, reqFilter === 'new' ? 'No new requests' : reqFilter === 'confirmed' ? 'Nothing confirmed yet' : 'Nothing here yet'));
+      em.appendChild(el('p', null, reqFilter === 'new' ? 'When a client sends a request from your booking page, it shows up here.' : reqFilter === 'confirmed' ? 'Confirm a new request and it moves here, with its calendar button.' : 'Finished, declined and past requests show here.'));
+      frag.appendChild(em);
+    }
+    list.forEach(function (r) { frag.appendChild(reqCard(r)); });
+    box.replaceChildren(frag);
+  }
+  function reqCard(r) {
+    var c = el('article', 'card rq rq-' + r.status); c.dataset.id = r.id;
+    var top = el('div', 'rq-top');
+    top.appendChild(el('span', 'pill pill-' + r.status, isPast(r) && r.status === 'new' ? 'Missed' : PILL[r.status]));
+    top.appendChild(el('span', 'rq-ago', 'Sent ' + ago(r.created_at) + ' by ' + (r.sent_by === 'instagram' ? 'Instagram' : 'text')));
+    c.appendChild(top);
+    c.appendChild(el('h3', 'rq-name', r.name));
+    c.appendChild(el('p', 'rq-when', when(r)));
+    var dl = el('dl', 'rq-dl');
+    function row(k, v) { if (!v) return; var d = el('div'); d.appendChild(el('dt', null, k)); d.appendChild(el('dd', null, v)); dl.appendChild(d); }
+    row('Style', r.style); row('Add-ons', r.addons); row('Takes about', durText(r.duration_min));
+    row('Total', '$' + r.total + (r.total_plus ? '+' : '')); row('Deposit', r.paid_said ? 'Client says paid. Check Stripe.' : 'Not paid yet');
+    row('Phone', phonePretty(r.phone)); row('Notes', r.notes);
+    c.appendChild(dl);
+    var acts = el('div', 'rq-acts');
+    function btn(label, cls, act) { var b = el('button', cls, label); b.type = 'button'; b.dataset.act = act; acts.appendChild(b); return b; }
+    function link(label, cls, href) { var a = el('a', cls, label); a.href = href; acts.appendChild(a); return a; }
+    if (r.status === 'new' && !isPast(r)) {
+      btn('Confirm', 'btn', 'confirm');
+      link('Text ' + firstName(r), 'btn-ghost', smsHref(r));
+      btn('Decline', 'btn-ghost quiet', 'decline');
+    } else if (r.status === 'confirmed' && !isPast(r)) {
+      var cal = link('Add to Apple Calendar', 'btn cal', icsHref(r));
+      cal.insertAdjacentHTML('afterbegin', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>');
+      link('Text ' + firstName(r) + ' the confirmation', 'btn-ghost', smsHref(r, confirmText(r)));
+      var r2 = el('div', 'row2'); acts.appendChild(r2);
+      [['Mark done', 'done'], ['Cancel booking', 'cancel']].forEach(function (x) { var b = el('button', x[1] === 'cancel' ? 'rm-btn' : null, x[0]); b.type = 'button'; b.dataset.act = x[1]; r2.appendChild(b); });
+    } else {
+      var r3 = el('div', 'row2'); acts.appendChild(r3);
+      if (r.status !== 'done' && !isPast(r)) { var b1 = el('button', null, 'Move back to new'); b1.type = 'button'; b1.dataset.act = 'reopen'; r3.appendChild(b1); }
+      var b2 = el('button', 'rm-btn', 'Delete'); b2.type = 'button'; b2.dataset.act = 'delete'; r3.appendChild(b2);
+    }
+    c.appendChild(acts);
+    return c;
+  }
+  document.querySelector('.seg').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-f]'); if (!b) return;
+    reqFilter = b.dataset.f; renderRequests();
+  });
+  function setStatus(r, st) { return sb.from('booking_requests').update({ status: st, updated_at: new Date().toISOString() }).eq('id', r.id).select(); }
+  function slot(r, from, to) { // the matching time on her calendar
+    return sb.from('availability').update({ status: to }).eq('date', r.appt_date).eq('start_time', r.appt_time).eq('status', from).select();
+  }
+  function mergeReq(rows) { rows.forEach(function (x) { for (var i = 0; i < reqs.length; i++) if (reqs[i].id === x.id) reqs[i] = x; }); }
+  $('#reqs').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-act]'); if (!b) return;
+    var card = b.closest('.rq'), r = reqs.filter(function (x) { return x.id === card.dataset.id; })[0]; if (!r) return;
+    var act = b.dataset.act, slotNote = '';
+    if (act === 'confirm') {
+      save('Confirming ' + r.name, function () {
+        return setStatus(r, 'confirmed').then(function (res) {
+          if (res.error || !(res.data || []).length) return res;
+          // Book the time on her site. If she already booked or removed it, the request still confirms.
+          return slot(r, 'open', 'booked').then(function (s2) {
+            slotNote = s2.error ? ' Check that time on your Hours tab.' : (s2.data || []).length ? ' The time shows as booked on your site.' : ' That time was not open on your calendar, so check your Hours tab.';
+            return res;
+          });
+        });
+      }, function () { return 'Confirmed.' + slotNote; }).then(function (rows) {
+        mergeReq(rows); reqFilter = 'confirmed'; renderRequests(); markHoursStale();
+        var c2 = document.querySelector('.rq[data-id="' + r.id + '"] .cal'); if (c2) c2.focus();
+      }, function () {});
+    } else if (act === 'decline') {
+      if (!window.confirm('Decline ' + r.name + '\'s request for ' + when(r) + '? The time stays open on your site. Text ' + firstName(r) + ' to let them know.')) return;
+      save('Declining', function () { return setStatus(r, 'declined'); }, 'Declined. The time is still open.').then(function (rows) { mergeReq(rows); renderRequests(); }, function () {});
+    } else if (act === 'done') {
+      save('Marking done', function () { return setStatus(r, 'done'); }, 'Marked done.').then(function (rows) { mergeReq(rows); renderRequests(); }, function () {});
+    } else if (act === 'cancel') {
+      if (!window.confirm('Cancel ' + r.name + '\'s booking on ' + when(r) + '? The time opens again on your site. Delete the event from your calendar too.')) return;
+      save('Canceling', function () {
+        return setStatus(r, 'declined').then(function (res) {
+          if (res.error || !(res.data || []).length) return res;
+          return slot(r, 'booked', 'open').then(function () { return res; });
+        });
+      }, 'Canceled. The time is open again.').then(function (rows) { mergeReq(rows); renderRequests(); markHoursStale(); }, function () {});
+    } else if (act === 'reopen') {
+      save('Moving back', function () { return setStatus(r, 'new'); }, 'Moved back to new.').then(function (rows) { mergeReq(rows); reqFilter = 'new'; renderRequests(); }, function () {});
+    } else if (act === 'delete') {
+      if (!window.confirm('Delete ' + r.name + '\'s request for good?')) return;
+      save('Deleting', function () { return sb.from('booking_requests').delete().eq('id', r.id).select(); }, 'Deleted.').then(function () {
+        reqs = reqs.filter(function (x) { return x.id !== r.id; }); renderRequests();
+      }, function () {});
+    }
+  });
+  function markHoursStale() { rows = {}; loadMonth(); }
+
+  /* ═══ Info: policies and FAQ ═══ */
+  var INFO = {
+    pol: { table: 'site_policies', box: '#pol-list', noun: 'policy', items: [], open: null,
+      fields: [{ k: 'big', label: 'Big text', max: 14, ph: 'Like $15 or 10 min' }, { k: 'title', label: 'Title', max: 30, ph: 'Like Deposit' }, { k: 'body', label: 'What it says', max: 240, area: true }],
+      head: function (x) { return x.big + ' · ' + x.title; }, sub: function (x) { return x.body; } },
+    faq: { table: 'faq_items', box: '#faq-list', noun: 'question', items: [], open: null,
+      fields: [{ k: 'q', label: 'Question', max: 120 }, { k: 'a', label: 'Answer', max: 500, area: true }],
+      head: function (x) { return x.q; }, sub: function (x) { return x.a; } }
+  };
+  function loadInfo() {
+    $('#info-err').hidden = true;
+    return Promise.all([INFO.pol, INFO.faq].map(function (L) {
+      return sb.from(L.table).select('*').order('sort').then(function (res) { if (res.error) throw res.error; L.items = res.data || []; });
+    })).then(function () {
+      tabLoaded.info = true;
+      ['pol', 'faq'].forEach(function (k) { $(INFO[k].box).removeAttribute('aria-busy'); renderInfo(k); });
+    }).catch(function (e) {
+      $('#info-err-text').textContent = 'Couldn\'t load your policies and FAQ. ' + friendly(e).replace(' Nothing was saved.', '');
+      $('#info-err').hidden = false;
+    });
+  }
+  $('#info-retry').addEventListener('click', loadInfo);
+  function renderInfo(k) {
+    var L = INFO[k], frag = document.createDocumentFragment(), ul = el('ul', 'opts');
+    L.items.forEach(function (x, i) {
+      var li = el('li'), b = el('button', 'opt-row info-row' + (x.hidden ? ' is-hidden' : ''));
+      b.type = 'button'; b.dataset.id = x.id; b.setAttribute('aria-expanded', L.open === x.id ? 'true' : 'false');
+      b.appendChild(el('span', 'on', L.head(x))); b.appendChild(el('span', 'op', x.hidden ? 'Hidden' : ''));
+      b.appendChild(el('span', 'ot', L.sub(x)));
+      li.appendChild(b);
+      if (L.open === x.id) li.appendChild(infoForm(k, x, i));
+      ul.appendChild(li);
+    });
+    frag.appendChild(ul);
+    if (L.open === 'new') frag.appendChild(infoForm(k, null, L.items.length));
+    else { var add = el('button', 'btn-ghost add-opt', 'Add a ' + L.noun); add.type = 'button'; add.dataset.add = '1'; frag.appendChild(add); }
+    $(L.box).replaceChildren(frag);
+  }
+  function infoForm(k, x, idx) {
+    var L = INFO[k], f = el('form', 'opt-form'); f.noValidate = true; if (x) f.dataset.id = x.id;
+    f.appendChild(el('h3', null, x ? 'Change this ' + L.noun : 'New ' + L.noun));
+    var first = null;
+    L.fields.forEach(function (fd) {
+      var inp = el(fd.area ? 'textarea' : 'input'); if (!fd.area) inp.type = 'text'; else inp.rows = 4;
+      inp.id = 'if-' + k + '-' + fd.k; inp.maxLength = fd.max; inp.value = x ? x[fd.k] : ''; inp.autocomplete = 'off'; if (fd.ph) inp.placeholder = fd.ph;
+      inp.dataset.k = fd.k; f.appendChild(field(fd.label, inp)); if (!first) first = inp;
+    });
+    var c = el('label', 'check'), hid = el('input'); hid.type = 'checkbox'; hid.id = 'if-' + k + '-hidden'; hid.checked = !!(x && x.hidden);
+    c.appendChild(hid); c.appendChild(document.createTextNode('Hide from my site for now')); f.appendChild(c);
+    var err = el('p', 'field-err'); err.setAttribute('role', 'alert'); err.hidden = true; f.appendChild(err);
+    var row = el('div', 'row'), sv = el('button', 'btn', 'Save'), cn = el('button', 'btn-ghost', 'Cancel');
+    sv.type = 'submit'; cn.type = 'button'; cn.dataset.cancel = '1'; row.appendChild(sv); row.appendChild(cn); f.appendChild(row);
+    if (x) {
+      var r3 = el('div', 'row3'), up = el('button', null, '↑ Up'), dn = el('button', null, '↓ Down'), rm = el('button', 'rm-btn', 'Remove');
+      [up, dn, rm].forEach(function (b) { b.type = 'button'; });
+      up.dataset.move = '-1'; dn.dataset.move = '1'; rm.dataset.remove = '1';
+      up.disabled = idx === 0; dn.disabled = idx >= L.items.length - 1;
+      r3.appendChild(up); r3.appendChild(dn); r3.appendChild(rm); f.appendChild(r3);
+    }
+    setTimeout(function () { first.focus(); f.scrollIntoView({ behavior: document.documentElement.classList.contains('rm') ? 'auto' : 'smooth', block: 'center' }); }, 30);
+    return f;
+  }
+  function mergeInfo(k, list) {
+    var L = INFO[k];
+    list.forEach(function (r) { var i = L.items.map(function (x) { return x.id; }).indexOf(r.id); if (i > -1) L.items[i] = r; else L.items.push(r); });
+    L.items.sort(function (a, b) { return a.sort - b.sort; });
+    L.open = null; renderInfo(k);
+  }
+  ['pol', 'faq'].forEach(function (k) {
+    var L = INFO[k], box = $(L.box);
+    box.addEventListener('click', function (e) {
+      var row = e.target.closest('.opt-row'), add = e.target.closest('[data-add]'), f = e.target.closest('.opt-form');
+      if (row) { L.open = L.open === row.dataset.id ? null : row.dataset.id; renderInfo(k); return; }
+      if (add) { L.open = 'new'; renderInfo(k); return; }
+      if (!f) return;
+      var b = e.target.closest('button'); if (!b) return;
+      var x = L.items.filter(function (y) { return y.id === f.dataset.id; })[0];
+      if (b.dataset.cancel) { L.open = null; renderInfo(k); return; }
+      if (b.dataset.move && x) {
+        var list = L.items.slice(), i = list.indexOf(x), j = i + Number(b.dataset.move); if (!list[j]) return;
+        list[i] = list[j]; list[j] = x;
+        var ups = list.map(function (y, n) { var o = {}; Object.keys(y).forEach(function (key) { o[key] = y[key]; }); o.sort = (n + 1) * 10; return o; });
+        save('Moving', function () { return sb.from(L.table).upsert(ups).select(); }, 'Saved. Order changed on your site.').then(function (d) { mergeInfo(k, d); L.open = x.id; renderInfo(k); }, function () {});
+        return;
+      }
+      if (b.dataset.remove && x) {
+        if (k === 'pol' && L.items.length === 1) { window.alert('Keep at least one policy. Tick "Hide from my site" to take it off instead.'); return; }
+        if (!window.confirm('Remove "' + L.head(x) + '" from your site?')) return;
+        save('Removing', function () { return sb.from(L.table).delete().eq('id', x.id).select(); }, 'Saved. Removed from your site.').then(function () {
+          L.items = L.items.filter(function (y) { return y.id !== x.id; }); L.open = null; renderInfo(k);
+        }, function () {});
+      }
+    });
+    box.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var f = e.target, id = f.dataset.id, err = f.querySelector('.field-err'), row = {}, bad = null;
+      L.fields.forEach(function (fd) {
+        var inp = f.querySelector('[data-k="' + fd.k + '"]'), v = cleanText(inp.value, fd.max); row[fd.k] = v;
+        if (!v && !bad) bad = [inp, fd.label + ' can\'t be empty.'];
+      });
+      if (bad) { err.textContent = bad[1]; err.hidden = false; bad[0].setAttribute('aria-invalid', 'true'); bad[0].focus(); return; }
+      row.hidden = f.querySelector('#if-' + k + '-hidden').checked; row.updated_at = new Date().toISOString();
+      if (id) {
+        save('Saving', function () { return sb.from(L.table).update(row).eq('id', id).select(); }, row.hidden ? 'Saved. Hidden from your site.' : 'Saved. It shows on your site.').then(function (d) { mergeInfo(k, d); }, function () {});
+      } else {
+        row.sort = L.items.length ? L.items[L.items.length - 1].sort + 10 : 10;
+        save('Adding', function () { return sb.from(L.table).insert(row).select(); }, row.hidden ? 'Saved. Hidden for now.' : 'Saved. It shows on your site.').then(function (d) { mergeInfo(k, d); }, function () {});
+      }
+    });
+    box.addEventListener('input', function (e) {
+      if (e.target.getAttribute('aria-invalid')) e.target.removeAttribute('aria-invalid');
+      var f = e.target.closest('form'), er = f && f.querySelector('.field-err'); if (er) er.hidden = true;
+    });
+  });
 
   /* ═══ Photos ═══ */
   var photos = [], openPhoto = null;

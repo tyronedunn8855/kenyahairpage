@@ -596,6 +596,47 @@ var GALLERY = [
   }
   loadLive();
 
+  /* ── live policies and FAQ from the owner panel. The cards and questions in the page are the fallback. ── */
+  var INFO_KEY = 'kd-info-v1', infoSig = '';
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function applyInfo(data) {
+    if (!data || !Array.isArray(data.pol) || !Array.isArray(data.faq)) return false;
+    var pol = data.pol.filter(function (p) { return p && !p.hidden; }).map(function (p) { return { big: clean(p.big, 14), title: clean(p.title, 30), body: clean(p.body, 240) }; })
+      .filter(function (p) { return p.big && p.title && p.body; });
+    var faq = data.faq.filter(function (f) { return f && !f.hidden; }).map(function (f) { return { q: clean(f.q, 120), a: clean(f.a, 500) }; })
+      .filter(function (f) { return f.q && f.a; });
+    var grid = $('#policy-grid'), list = $('#faq-list'), fresh = [];
+    if (pol.length) {
+      grid.textContent = '';
+      pol.forEach(function (p) { var li = el('li', 'pol'); li.appendChild(el('span', 'pol-big', p.big)); li.appendChild(el('h3', null, p.title)); li.appendChild(el('p', null, p.body)); grid.appendChild(li); fresh.push(li); });
+    }
+    list.textContent = '';
+    faq.forEach(function (f) { var d = el('details', 'faq'); d.appendChild(el('summary', null, f.q)); d.appendChild(el('p', null, f.a)); list.appendChild(d); });
+    $('#faq').hidden = !faq.length;
+    if (window.__kdReveal && fresh.length) window.__kdReveal(fresh);
+    return true;
+  }
+  (function () {
+    if (!LIVE.url) return;
+    try { var c = JSON.parse(localStorage.getItem(INFO_KEY) || 'null'); if (c && c.url === LIVE.url && Date.now() - c.t < 30 * 864e5 && applyInfo(c.data)) infoSig = JSON.stringify(c.data); } catch (e) {}
+  })();
+  function loadInfo() {
+    if (!LIVE.url || !LIVE.anonKey) return;
+    var root = LIVE.url.replace(/\/+$/, '') + '/rest/v1/', opt = { headers: { apikey: LIVE.anonKey }, cache: 'no-store' };
+    var get = function (q) { return fetch(root + q, opt).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }); };
+    Promise.all([
+      get('site_policies?select=big,title,body,hidden,sort&order=sort.asc&limit=40'),
+      get('faq_items?select=q,a,hidden,sort&order=sort.asc&limit=60')
+    ]).then(function (r) {
+      var data = { pol: r[0], faq: r[1] }, sig = JSON.stringify(data);
+      if (sig === infoSig || !applyInfo(data)) return;
+      infoSig = sig;
+      try { localStorage.setItem(INFO_KEY, JSON.stringify({ url: LIVE.url, t: Date.now(), data: data })); } catch (e) {}
+      if (window.ScrollTrigger) ScrollTrigger.refresh();
+    }).catch(function () { /* keep what is showing */ });
+  }
+  loadInfo();
+
   $('#cal-prev').addEventListener('click', function () { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); renderCal(); calAnim(-1); });
   $('#cal-next').addEventListener('click', function () { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); renderCal(); calAnim(1); });
   function calAnim(dir) { if (hasGsap && !reduced) gsap.from('#cal-grid .day:not(.blank)', { opacity: 0, x: 10 * dir, duration: .35, stagger: .006, ease: 'power2.out' }); }
@@ -683,6 +724,7 @@ var GALLERY = [
 
     var sent = !!state.sentKey && state.sentKey === bookingKey() && !missing(false);
     $('#after').hidden = !sent;
+    $('#after-saved').hidden = !sent || savedKey !== bookingKey() + '|' + digits();
     if (sent) $('#gcal').href = gcalUrl();
     mbar();
     save();
@@ -768,17 +810,40 @@ var GALLERY = [
   /* coming back with the browser's back button: un-stick the pay button */
   addEventListener('pageshow', function (e) { if (e.persisted) update(); });
 
-  /* ── send request ── */
+  /* ── send request ──
+     The text or DM is the request. When the calendar is live, a copy also goes to Kenya's booking list
+     through submit_booking_request(), which checks the time is open and refuses floods. */
+  var savedKey = null;
+  function saveRequest(via) {
+    var key = bookingKey() + '|' + digits();
+    if (!SB.url || !SB.anonKey || schedMode !== 'live' || savedKey === key) return;
+    var s = svc(), t = total(), adds = [];
+    if (state.longHair) adds.push('Past butt length'); if (state.design) adds.push('Design');
+    var m = toMin(state.time), hhmm = String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+    var body = {
+      p_name: clean($('#f-name').value, 60), p_phone: digits().slice(-10), p_style: clean(styleText(), 90), p_addons: adds.join(', '),
+      p_date: iso(state.date), p_time: hhmm, p_duration_min: durMin(), p_total: t.sum, p_total_plus: t.plus,
+      p_notes: clean($('#f-notes').value, 400), p_paid_said: !!state.paid, p_sent_by: via, p_website: $('#f-web').value
+    };
+    if (body.p_website) return; // bots fill the hidden field
+    fetch(SB.url.replace(/\/+$/, '') + '/rest/v1/rpc/submit_booking_request', {
+      method: 'POST', headers: { apikey: SB.anonKey, 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      savedKey = key;
+      if (state.sentKey === bookingKey()) $('#after-saved').hidden = false;
+    }).catch(function () { /* the text or DM still carries the request */ });
+  }
   function markSent() { state.sentKey = bookingKey(); update(); }
   $('#send-text').addEventListener('click', function () {
     var m = missing(false); if (m) return showErr(m);
-    markSent();
+    markSent(); saveRequest('text');
     var sep = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent) ? '&' : '?';
     window.location.href = 'sms:' + CONFIG.phone + sep + 'body=' + encodeURIComponent(message());
   });
   $('#send-ig').addEventListener('click', function () {
     var m = missing(false); if (m) return showErr(m);
-    markSent();
+    markSent(); saveRequest('instagram');
     var msg = message();
     var go = function () { window.open('https://ig.me/m/' + CONFIG.instagram, '_blank', 'noopener'); };
     if (navigator.clipboard) {
@@ -956,7 +1021,8 @@ var GALLERY = [
       onEnter: function (b) { gsap.to(b, { opacity: 1, y: 0, duration: .8, ease: 'power3.out', stagger: .06, overwrite: true }); }
     }, opts || {}));
   }
-  ['.sec-note', '.pcat', '.g-item', '.pol', '.link-row', '.cc-left > p'].forEach(function (sel) {
+  window.__kdReveal = function (els) { els = els.filter(below); if (els.length) { gsap.set(els, { opacity: 0, y: 22 }); reveal(els); } };
+  ['.sec-note', '.pcat', '.g-item', '.pol', '.faq-h', '.faq', '.link-row', '.cc-left > p'].forEach(function (sel) {
     var els = $$(sel).filter(below);
     if (els.length) { gsap.set(els, { opacity: 0, y: 22 }); reveal(els); }
   });
