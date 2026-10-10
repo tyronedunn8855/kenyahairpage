@@ -453,3 +453,20 @@ body.mbar-on .toast{bottom:92px}
 
 /* Motion toggle (footer): full motion by default, visitors can turn it off */
 .motion-toggle{background:none;border:0;padding:0;margin-left:10px;font:inherit;color:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer;min-height:44px}
+
+/* ---------- hero 3D braid and bead (bead3d.js) ---------- */
+.hero-bead{position:absolute;right:-74px;bottom:56px;width:176px;height:280px;pointer-events:none;z-index:2;
+  opacity:0;transform:translateY(18px) scale(.92);transition:opacity .9s var(--ease),transform 1.1s var(--ease)}
+.hero-bead canvas{display:block;width:100%;height:100%}
+.hero-bead.is-live{opacity:1;transform:none}
+@media (max-width:900px){.hero-bead{right:-44px;width:110px;height:180px;bottom:48px}}
+@media (max-width:600px){.hero-bead{right:-40px;width:88px;height:146px;bottom:44px}}
+
+/* ---------- type and surface polish ---------- */
+h1,h2{text-wrap:balance}
+.hero-sub,.sec-note,.pcat p{text-wrap:pretty}
+.wo{display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.08em;margin-bottom:-.08em}
+.wi{display:inline-block}
+html{scrollbar-color:var(--lilac) var(--mist)}
+::placeholder{color:#8a7fa0}
+input,textarea{caret-color:var(--l700)}

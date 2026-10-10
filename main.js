@@ -783,6 +783,40 @@ var GALLERY = [
   gsap.fromTo('.hero-photo img', { scale: 1.05 }, { scale: 1, duration: 1.6, ease: 'power3.out' });
   gsap.to('.hero-photo img', { yPercent: 6, ease: 'none', scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: true } });
 
+  var below = function (el) { return el.getBoundingClientRect().top > innerHeight; };
+  /* headings: words rise out of a mask, line by line (the text a screen reader gets is unchanged) */
+  function splitWords(el) {
+    if (el.dataset.split) return $$('.wi', el);
+    var words = el.textContent.trim().split(/\s+/);
+    el.setAttribute('aria-label', el.textContent.trim());
+    el.textContent = '';
+    words.forEach(function (w, i) {
+      var o = document.createElement('span'); o.className = 'wo'; o.setAttribute('aria-hidden', 'true');
+      var n = document.createElement('span'); n.className = 'wi'; n.textContent = w;
+      o.appendChild(n); el.appendChild(o);
+      if (i < words.length - 1) el.appendChild(document.createTextNode(' '));
+    });
+    el.dataset.split = '1';
+    return $$('.wi', el);
+  }
+  var h1w = splitWords($('.hero h1'));
+  gsap.timeline({ delay: .1 })
+    .from('.hero .eyebrow', { opacity: 0, y: 14, duration: .7, ease: 'power3.out' })
+    .from(h1w, { yPercent: 115, duration: 1.1, ease: 'expo.out', stagger: .045 }, .05)
+    .from('.hero-sub, .hero-cta', { opacity: 0, y: 22, duration: .9, ease: 'power3.out', stagger: .09 }, .35)
+    .from('.hero-rates li', { opacity: 0, y: 12, duration: .6, ease: 'power3.out', stagger: .04 }, .55);
+  $$('.sec-head h2').forEach(function (h) {
+    var w = splitWords(h);
+    if (!below(h)) return;
+    gsap.set(w, { yPercent: 115 });
+    ScrollTrigger.create({ trigger: h, start: 'top 90%', once: true, onEnter: function () { gsap.to(w, { yPercent: 0, duration: 1.05, ease: 'expo.out', stagger: .06 }); } });
+  });
+  /* photos open upward as they arrive (gallery and the price-list photo) */
+  $$('.g-item img, .rp-frame').filter(function (el) { return el.getBoundingClientRect().top > innerHeight; }).forEach(function (el) {
+    gsap.set(el, { clipPath: 'inset(100% 0% 0% 0%)' });
+    ScrollTrigger.create({ trigger: el, start: 'top 94%', once: true, onEnter: function () { gsap.to(el, { clipPath: 'inset(0% 0% 0% 0%)', duration: 1.1, ease: 'expo.inOut', clearProps: 'clipPath' }); } });
+  });
+
   /* section labels: the stitch grows in */
   $$('.sec-label .cr').forEach(function (el) {
     gsap.fromTo(el, { clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0% 0 0)', duration: .9, ease: 'power2.out', scrollTrigger: { trigger: el, start: 'top 92%', once: true } });
@@ -796,8 +830,7 @@ var GALLERY = [
       onEnter: function (b) { gsap.to(b, { opacity: 1, y: 0, duration: .8, ease: 'power3.out', stagger: .06, overwrite: true }); }
     }, opts || {}));
   }
-  var below = function (el) { return el.getBoundingClientRect().top > innerHeight; };
-  ['.sec-head h2', '.sec-note', '.pcat', '.g-item', '.pol', '.link-row', '.cc-left > p'].forEach(function (sel) {
+  ['.sec-note', '.pcat', '.g-item', '.pol', '.link-row', '.cc-left > p'].forEach(function (sel) {
     var els = $$(sel).filter(below);
     if (els.length) { gsap.set(els, { opacity: 0, y: 22 }); reveal(els); }
   });

@@ -59,6 +59,8 @@
     <figure class="hero-photo">
       <picture><source type="image/webp" srcset="img/w/owner-400.webp 400w, img/w/owner-800.webp 800w, img/w/owner-1174.webp 1174w" sizes="(max-width:600px) 300px, (max-width:900px) 40vw, 420px"><img src="img/owner.jpg" alt="Kenya, owner of ken.didit" width="1174" height="1972" fetchpriority="high"></picture>
       <figcaption class="hero-cap"><span class="mono">Kenya</span><span>Owner, ken.didit</span></figcaption>
+      <!-- 3D braid and lilac bead (bead3d.js); decorative, fades in once it renders -->
+      <div class="hero-bead" aria-hidden="true"><canvas></canvas></div>
     </figure>
   </div>
 
@@ -314,6 +316,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <script src="main.js"></script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
+<script type="module" src="bead3d.js"></script>
 <script>(function(){var b=document.querySelector('.motion-toggle');if(!b)return;var off=!!window.__rm;b.textContent=off?'Turn motion on':'Turn motion off';b.setAttribute('aria-pressed',off?'true':'false');b.addEventListener('click',function(){try{localStorage.setItem('kd-motion',off?'on':'off')}catch(e){}location.reload()})})();</script>
 </body>
 </html>
