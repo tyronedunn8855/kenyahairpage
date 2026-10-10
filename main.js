@@ -12,13 +12,23 @@ var CONFIG = {
   depositLink: 'https://buy.stripe.com/fZucN4bB49VfdFEcTd8Vi00',
   deposit: 15,
 
-  // Booking calendar. Days: 0 = Sunday ... 6 = Saturday.
-  // PLACEHOLDER: openDays and slots are guesses until Kenya confirms her real
-  // hours. The site never states them as business hours; they only drive the
-  // calendar. Update these two lines when she sends her schedule.
-  openDays: [2, 3, 4, 5, 6],
-  slots: ['8:00 AM', '11:00 AM', '2:00 PM', '5:00 PM'],
-  blockedDates: [],          // e.g. ['2026-10-31', '2026-11-26']
+  // BOOKING SCHEDULE (from Kenya, Oct 9 2026).
+  // Only the dates listed here can be booked. Every other day shows as closed.
+  // To open a day, add a line: 'YYYY-MM-DD': ['time', 'time'],
+  // To close a day, delete its line.
+  schedule: {
+    '2026-10-10': ['4:30 PM'],                                 // works at 8 AM
+    '2026-10-13': ['4:30 PM'],                                 // works at 8 AM
+    '2026-10-14': ['8:00 AM', '11:00 AM'],                     // mornings only
+    '2026-10-15': ['8:00 AM', '11:00 AM'],                     // mornings only
+    '2026-10-16': ['4:30 PM'],                                 // works at 8 AM
+    '2026-10-17': ['4:30 PM'],                                 // works at 8 AM
+    '2026-10-18': ['4:30 PM'],                                 // works at 8 AM
+    '2026-10-19': ['4:30 PM'],                                 // works at 8 AM
+    '2026-10-21': ['8:00 AM', '11:00 AM', '2:00 PM', '5:00 PM'], // open day
+    '2026-10-22': ['8:00 AM', '11:00 AM', '2:00 PM', '5:00 PM'], // open day
+    '2026-10-27': ['8:00 AM', '11:00 AM', '2:00 PM', '5:00 PM']  // open day
+  },
   monthsAhead: 3
 };
 
@@ -250,7 +260,7 @@ var GALLERY = [
   var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function sameDay(a, b) { return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
-  function isOpen(d) { return d >= today && CONFIG.openDays.indexOf(d.getDay()) > -1 && CONFIG.blockedDates.indexOf(iso(d)) === -1; }
+  function isOpen(d) { return d >= today && !!(CONFIG.schedule[iso(d)] || []).length; }
 
   function renderCal() {
     $('#cal-title').textContent = MONTHS[view.getMonth()] + ' ' + view.getFullYear();
@@ -269,7 +279,7 @@ var GALLERY = [
   function renderSlots() {
     if (!state.date) { $('#slots-label').textContent = 'Pick a date to see open times.'; $('#slots').innerHTML = ''; return; }
     $('#slots-label').textContent = 'Open times on ' + fmtDate(state.date) + ':';
-    $('#slots').innerHTML = CONFIG.slots.map(function (t) {
+    $('#slots').innerHTML = (CONFIG.schedule[iso(state.date)] || []).map(function (t) {
       return '<button class="chip slot" role="radio" aria-checked="' + (state.time === t) + '" data-t="' + t + '">' + t + '</button>';
     }).join('');
   }
