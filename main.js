@@ -79,7 +79,7 @@ var GALLERY = [
 /* ════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
-  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var reduced = !!window.__rm;
   var narrow = matchMedia('(max-width: 900px)');
   var hasGsap = !!(window.gsap && window.ScrollTrigger);
   var $ = function (s, r) { return (r || document).querySelector(s); };
