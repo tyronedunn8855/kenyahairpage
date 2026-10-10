@@ -6,10 +6,22 @@
 <title>ken.didit | Braids, Locs &amp; Quick Weaves | Book Now</title>
 <meta name="description" content="Book knotless braids, Fulani braids, feed-ins, quick weaves, men's styles, and kids' styles with ken.didit (@doitfortae_). See prices and request your appointment online.">
 <meta name="theme-color" content="#FFFFFF">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%236B47AE'/><g fill='white'><path d='M28 22C50 24 66 36 74 50 52 49 36 39 28 22Z'/><path d='M28 78C50 76 66 64 74 50 52 51 36 61 28 78Z'/></g></svg>">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<!-- Share preview. Social apps need absolute URLs: SITE_URL below is assumed to be
+     https://kenyahairpage.vercel.app. Change all three if the live domain is different. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ken.didit">
+<meta property="og:url" content="https://kenyahairpage.vercel.app/">
 <meta property="og:title" content="ken.didit | Braids, locs &amp; quick weaves by Kenya">
 <meta property="og:description" content="Prices and times for every style, a booking calendar, and a $15 deposit to lock in your spot.">
-<meta property="og:image" content="img/owner.jpg">
+<meta property="og:image" content="https://kenyahairpage.vercel.app/img/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="ken.didit wordmark beside a photo of Kenya">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" as="image" type="image/webp" imagesrcset="img/w/owner-400.webp 400w, img/w/owner-800.webp 800w, img/w/owner-1174.webp 1174w" imagesizes="(max-width:600px) 300px, (max-width:900px) 40vw, 420px" fetchpriority="high">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -40,7 +52,7 @@
   <div class="hero-art">
     <span class="cr-v hero-thread" aria-hidden="true"></span>
     <figure class="hero-photo">
-      <img src="img/owner.jpg" alt="Kenya, owner of ken.didit" width="1174" height="1972" fetchpriority="high">
+      <picture><source type="image/webp" srcset="img/w/owner-400.webp 400w, img/w/owner-800.webp 800w, img/w/owner-1174.webp 1174w" sizes="(max-width:600px) 300px, (max-width:900px) 40vw, 420px"><img src="img/owner.jpg" alt="Kenya, owner of ken.didit" width="1174" height="1972" fetchpriority="high"></picture>
       <figcaption class="hero-cap"><span class="mono">Kenya</span><span>Owner, ken.didit</span></figcaption>
     </figure>
   </div>
@@ -104,7 +116,7 @@
     <div class="sec-head">
       <p class="sec-label"><span class="mono">03</span><span class="cr" aria-hidden="true"></span><span class="mono">Booking</span></p>
       <h2 id="h-book">Book your appointment</h2>
-      <p class="sec-note">Choose your style, pick a date and time, then send your request. Your spot is locked in once the $15 deposit is received.</p>
+      <p class="sec-note">Choose your style, pick a date and time, then send your request. Kenya confirms your time by text, and the $15 deposit locks in your spot.</p>
     </div>
 
     <div class="booker">
@@ -112,19 +124,20 @@
 
         <!-- step 1 -->
         <div class="step" id="s1">
-          <div class="step-head"><span class="step-n">1</span><div><h3>Choose your style</h3><p>Pick a category, then a size or option.</p></div></div>
-          <div class="step-body">
+          <div class="step-head"><span class="step-n" aria-hidden="true">1</span><div><h3 id="s1-h" tabindex="-1"><span class="sr">Step 1 of 3: </span>Choose your style</h3><p class="step-sub">Pick a category, then a size or option.</p><p class="step-pick" id="s1-pick"></p></div><button class="step-edit" data-edit="s1" aria-controls="s1-body" aria-expanded="true">Change<span class="sr"> Choose your style</span></button></div>
+          <div class="step-body" id="s1-body">
             <div class="chips" id="cat-chips" role="radiogroup" aria-label="Style category"></div>
             <div class="opts" id="opt-chips" role="radiogroup" aria-label="Size or option"></div>
             <div class="addons" id="addons"></div>
+            <button class="btn btn-line btn-sm step-next" data-next="s2" hidden>Next: pick a date</button>
           </div>
         </div>
 
         <!-- step 2 -->
         <div class="step" id="s2">
-          <div class="step-head"><span class="step-n">2</span><div><h3>Pick a date &amp; time</h3><p>Days you can book are shown in bold. Grayed-out days are booked or closed.</p></div></div>
-          <div class="step-body">
-            <div class="cal">
+          <div class="step-head"><span class="step-n" aria-hidden="true">2</span><div><h3 id="s2-h" tabindex="-1"><span class="sr">Step 2 of 3: </span>Pick a date &amp; time</h3><p class="step-sub">Days you can book are shown in bold. Grayed-out days are booked or closed.</p><p class="step-pick" id="s2-pick"></p></div><button class="step-edit" data-edit="s2" aria-controls="s2-body" aria-expanded="true">Change<span class="sr"> Pick a date &amp; time</span></button></div>
+          <div class="step-body" id="s2-body">
+            <div class="cal" id="cal" aria-busy="true">
               <div class="cal-top">
                 <button class="cal-nav" id="cal-prev" aria-label="Previous month"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
                 <p id="cal-title" aria-live="polite"></p>
@@ -132,21 +145,24 @@
               </div>
               <div class="cal-dow" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
               <div class="cal-grid" id="cal-grid"></div>
+              <div class="cal-load" id="cal-load" role="status"><span class="cr" aria-hidden="true"></span><span>Loading Kenya's latest openings…</span></div>
             </div>
+            <p class="cal-note" id="cal-note" role="status"></p>
             <div class="slots-wrap">
               <p class="slots-label" id="slots-label">Pick a date to see open times.</p>
               <div class="slots" id="slots" role="radiogroup" aria-labelledby="slots-label"></div>
             </div>
+            <button class="btn btn-line btn-sm step-next" data-next="s3" hidden>Next: your info</button>
           </div>
         </div>
 
         <!-- step 3 -->
         <div class="step" id="s3">
-          <div class="step-head"><span class="step-n">3</span><div><h3>Your info</h3><p>So Kenya can confirm and send the address.</p></div></div>
-          <div class="step-body">
+          <div class="step-head"><span class="step-n" aria-hidden="true">3</span><div><h3 id="s3-h" tabindex="-1"><span class="sr">Step 3 of 3: </span>Your info</h3><p class="step-sub">So Kenya can confirm and send the address.</p></div></div>
+          <div class="step-body" id="s3-body">
             <div class="form">
-              <label>Full name<input id="f-name" type="text" autocomplete="name" placeholder="Your name"></label>
-              <label>Phone number<input id="f-phone" type="tel" autocomplete="tel" placeholder="(414) 555-0123"></label>
+              <label>Full name<input id="f-name" type="text" autocomplete="name" autocapitalize="words" enterkeyhint="next" placeholder="Your name" aria-describedby="e-name"><span class="f-err" id="e-name"></span></label>
+              <label>Phone number<input id="f-phone" type="tel" inputmode="tel" autocomplete="tel" enterkeyhint="next" placeholder="(414) 555-0123" aria-describedby="e-phone"><span class="f-err" id="e-phone"></span></label>
               <label class="full">Anything else? <span class="opt-l">(optional)</span><textarea id="f-notes" rows="3" placeholder="Color, length, hair type, or inspo you'll send"></textarea></label>
             </div>
           </div>
@@ -187,7 +203,20 @@
           <p class="sum-step"><span>B</span>Send your booking request</p>
           <button class="btn btn-primary btn-wide" id="send-text">Send request by text <svg class="arw" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
           <button class="btn btn-line btn-wide" id="send-ig">Send on Instagram instead</button>
+          <p class="sum-note"><b>Not confirmed yet.</b> Sending a request does not hold the time. It's yours once Kenya texts you back.</p>
+          <div class="after" id="after" hidden tabindex="-1">
+            <p class="after-h">Request ready to send</p>
+            <p>Make sure you hit send in Messages or Instagram. Kenya will text you to confirm, and the address comes the day before.</p>
+            <p class="after-l mono">Save it while you wait</p>
+            <div class="after-btns">
+              <button class="btn btn-line btn-sm" id="ics">Add to calendar</button>
+              <a class="btn btn-line btn-sm" id="gcal" target="_blank" rel="noopener">Google Calendar</a>
+              <button class="btn btn-line btn-sm" id="copy-req">Copy request</button>
+            </div>
+            <p class="after-fine">Saved as "pending" until Kenya confirms.</p>
+          </div>
           <p class="sum-fine"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Deposits are processed securely by Stripe. Your card details never touch this site. The deposit goes toward your service.</p>
+          <button class="reset" id="reset">Start over</button>
         </div>
       </aside>
     </div>
@@ -267,6 +296,14 @@
   <figure><img id="lb-img" src="data:," alt=""><figcaption><span id="lb-cap"></span><a class="btn btn-primary btn-sm" id="lb-book" href="#book">Book this style</a></figcaption></figure>
 </div>
 <div class="toast" id="toast" role="status"></div>
+<div class="mbar" id="mbar" aria-hidden="true">
+  <div class="mbar-in">
+    <ol class="mbar-steps" aria-hidden="true"><li data-s="s1"></li><li data-s="s2"></li><li data-s="s3"></li></ol>
+    <div class="mbar-txt"><span class="mbar-k" id="mbar-k">Step 1 of 3</span><span class="mbar-v" id="mbar-v">Choose your style</span></div>
+    <b class="mbar-t" id="mbar-t"></b>
+    <button class="btn btn-primary btn-sm" id="mbar-go" tabindex="-1">Review</button>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.14/dist/lenis.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
