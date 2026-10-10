@@ -261,6 +261,16 @@ var GALLERY = [
   var today = new Date(); today.setHours(0, 0, 0, 0);
   var view = new Date(today.getFullYear(), today.getMonth(), 1);
   var maxView = new Date(today.getFullYear(), today.getMonth() + CONFIG.monthsAhead, 1);
+  /* jump to the first month with an open date, and allow paging out to the last one */
+  function fitView() {
+    var keys = Object.keys(CONFIG.schedule).filter(function (k) { return (CONFIG.schedule[k] || []).length && k >= iso(today); }).sort();
+    var cur = new Date(today.getFullYear(), today.getMonth(), 1);
+    if (!keys.length) { maxView = cur; return; }
+    var f = keys[0].split('-'), l = keys[keys.length - 1].split('-');
+    maxView = new Date(+l[0], +l[1] - 1, 1);
+    if (maxView < cur) maxView = cur;
+    if (!state.date) view = new Date(+f[0], +f[1] - 1, 1);
+  }
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -324,7 +334,7 @@ var GALLERY = [
         Object.keys(sched).forEach(function (k) {
           sched[k] = sched[k].filter(function (t, i, a) { return a.indexOf(t) === i; }).sort(function (a, b) { return toMin(a) - toMin(b); });
         });
-        CONFIG.schedule = sched;
+        CONFIG.schedule = sched; fitView();
         if (state.date && !isOpen(state.date)) { state.date = null; state.time = null; }
         if (state.time && (sched[iso(state.date)] || []).indexOf(state.time) < 0) state.time = null;
         renderCal(); renderSlots(); update();
@@ -468,7 +478,7 @@ var GALLERY = [
     try { history.replaceState(null, '', location.pathname + '#book'); } catch (e) {}
   }
   if (state.date && state.date >= today) view = new Date(state.date.getFullYear(), state.date.getMonth(), 1); else { state.date = null; state.time = null; }
-  renderService(); renderCal(); renderSlots(); update();
+  fitView(); renderService(); renderCal(); renderSlots(); update();
 
   /* ════════════ motion ════════════
      Nothing below hides content before it runs. Reveals only start once
