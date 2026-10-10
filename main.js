@@ -12,12 +12,13 @@ var CONFIG = {
   depositLink: 'https://buy.stripe.com/fZucN4bB49VfdFEcTd8Vi00',
   deposit: 15,
 
-  // LIVE SCHEDULE: the booking calendar reads Kenya's Google Sheet
-  // "ken.didit booking schedule" (tab "Schedule"). She edits the sheet, the
-  // site updates. The sheet must be shared as "Anyone with the link: Viewer".
+  // LIVE SCHEDULE: Kenya sets her hours in the owner panel (/admin/), saved in
+  // Supabase. The URL and public key live in supabase-config.js.
+  // Until those are filled in, the calendar reads her old Google Sheet
+  // "ken.didit booking schedule" (tab "Schedule") instead.
   scheduleSheetId: '1mRGWAifZ88s07uuNx30Xlp8xKt3ZH203RYcCWtnC6gU',
 
-  // BACKUP SCHEDULE: used only if the sheet can't be reached.
+  // BACKUP SCHEDULE: used only if the live schedule can't be reached.
   // Only the dates listed here can be booked. Every other day shows as closed.
   // To open a day, add a line: 'YYYY-MM-DD': ['time', 'time'],
   // To close a day, delete its line.
@@ -341,8 +342,11 @@ var GALLERY = [
   var today = new Date(); today.setHours(0, 0, 0, 0);
   var view = new Date(today.getFullYear(), today.getMonth(), 1);
   var maxView = new Date(today.getFullYear(), today.getMonth() + CONFIG.monthsAhead, 1);
-  /* schedule status for the UI: 'loading' until the sheet answers, then 'live' or 'backup' */
-  var schedMode = CONFIG.scheduleSheetId ? 'loading' : 'backup';
+  /* where live hours come from: Supabase (owner panel) when connected, else the Google Sheet */
+  var SB = window.KD_SUPABASE || {};
+  var liveSource = SB.url && SB.anonKey ? 'supabase' : CONFIG.scheduleSheetId ? 'sheet' : '';
+  /* schedule status for the UI: 'loading' until the live source answers, then 'live' or 'backup' */
+  var schedMode = liveSource ? 'loading' : 'backup';
   function openKeys() { return Object.keys(CONFIG.schedule).filter(function (k) { return (CONFIG.schedule[k] || []).length && k >= iso(today); }).sort(); }
   function keyDate(k) { var p = k.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
   /* jump to the first month with an open date, and allow paging out to the last one */
@@ -397,7 +401,7 @@ var GALLERY = [
         html = 'No open dates right now. <a class="tlink" href="sms:' + CONFIG.phone + '">Text Kenya</a> to ask about the next opening.';
       }
     }
-    if (schedMode === 'backup' && CONFIG.scheduleSheetId) html += (html ? '<br>' : '') + '<span class="cal-warn">Couldn\'t reach the live schedule, so these are the last saved openings. Kenya will confirm your time.</span>';
+    if (schedMode === 'backup' && liveSource) html += (html ? '<br>' : '') + '<span class="cal-warn">Couldn\'t reach the live schedule, so these are the last saved openings. Kenya will confirm your time.</span>';
     note.innerHTML = html;
   }
   $('#cal-note').addEventListener('click', function (e) {
@@ -437,6 +441,39 @@ var GALLERY = [
     if (m) return new Date(+m[1], +m[2], +m[3]);
     var d = new Date(c.f || c.v); return isNaN(d) ? null : d;
   }
+  /* put a fresh live schedule ({ 'YYYY-MM-DD': ['4:30 PM', ...] }) on the calendar */
+  function useSchedule(sched) {
+    Object.keys(sched).forEach(function (k) {
+      sched[k] = sched[k].filter(function (t, i, a) { return a.indexOf(t) === i; }).sort(function (a, b) { return toMin(a) - toMin(b); });
+    });
+    CONFIG.schedule = sched; fitView();
+    if (state.date && !isOpen(state.date)) { state.date = null; state.time = null; state.collapsed.s2 = false; }
+    if (state.time && (sched[iso(state.date)] || []).indexOf(state.time) < 0) { state.time = null; state.collapsed.s2 = false; }
+    schedDone('live');
+  }
+  /* live schedule from the owner panel: open times from today on, read with the public key.
+     Row Level Security lets visitors read dates, times and status only, never change them. */
+  function loadSupabase() {
+    var ctl = 'AbortController' in window ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctl) ctl.abort(); schedDone('backup'); }, 8000);
+    var url = SB.url.replace(/\/+$/, '') + '/rest/v1/availability?select=date,start_time,status' +
+      '&status=eq.open&date=gte.' + iso(today) + '&order=date.asc,start_time.asc&limit=1000';
+    fetch(url, { headers: { apikey: SB.anonKey, Authorization: 'Bearer ' + SB.anonKey }, signal: ctl ? ctl.signal : undefined, cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (list) {
+        clearTimeout(timer);
+        if (schedMode !== 'loading' || !Array.isArray(list)) return schedDone('backup');
+        var sched = {};
+        list.forEach(function (r) {
+          if (!r || !/^\d{4}-\d{2}-\d{2}$/.test(r.date)) return;
+          var t = normTime(fmt12(r.start_time)); if (!t) return;
+          (sched[r.date] = sched[r.date] || []).push(t);
+        });
+        useSchedule(sched);
+      })
+      .catch(function () { clearTimeout(timer); schedDone('backup'); });
+  }
+  function fmt12(t) { var m = String(t || '').match(/^(\d{1,2}):(\d{2})/); if (!m) return ''; var h = +m[1]; return ((h + 11) % 12 + 1) + ':' + m[2] + (h < 12 ? ' AM' : ' PM'); }
   function loadSheet() {
     if (!CONFIG.scheduleSheetId) return;
     var cb = '__kenSched' + Date.now(), done = false, tag = document.createElement('script');
@@ -452,13 +489,7 @@ var GALLERY = [
           if (!ts.length) return;
           var k = iso(d); sched[k] = (sched[k] || []).concat(ts);
         });
-        Object.keys(sched).forEach(function (k) {
-          sched[k] = sched[k].filter(function (t, i, a) { return a.indexOf(t) === i; }).sort(function (a, b) { return toMin(a) - toMin(b); });
-        });
-        CONFIG.schedule = sched; fitView();
-        if (state.date && !isOpen(state.date)) { state.date = null; state.time = null; state.collapsed.s2 = false; }
-        if (state.time && (sched[iso(state.date)] || []).indexOf(state.time) < 0) { state.time = null; state.collapsed.s2 = false; }
-        schedDone('live');
+        useSchedule(sched);
       } catch (e) { /* keep backup schedule */ schedDone('backup'); }
     };
     tag.onerror = function () { if (!done) { finish(); schedDone('backup'); } };
@@ -468,7 +499,7 @@ var GALLERY = [
     document.head.appendChild(tag);
   }
   function toMin(t) { var m = t.match(/(\d+):(\d+) ([AP])M/); return (+m[1] % 12) * 60 + (+m[2]) + (m[3] === 'P' ? 720 : 0); }
-  loadSheet();
+  if (liveSource === 'supabase') loadSupabase(); else loadSheet();
 
   $('#cal-prev').addEventListener('click', function () { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); renderCal(); calAnim(-1); });
   $('#cal-next').addEventListener('click', function () { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); renderCal(); calAnim(1); });
