@@ -72,6 +72,13 @@
 
   <!-- The panel -->
   <section class="view" id="v-panel" hidden>
+    <div class="tabs" role="tablist" aria-label="What to change">
+      <button type="button" role="tab" id="tab-hours" aria-controls="t-hours" aria-selected="true">Hours</button>
+      <button type="button" role="tab" id="tab-prices" aria-controls="t-prices" aria-selected="false" tabindex="-1">Prices</button>
+      <button type="button" role="tab" id="tab-photos" aria-controls="t-photos" aria-selected="false" tabindex="-1">Photos</button>
+    </div>
+
+    <div class="tab-panel" id="t-hours" role="tabpanel" aria-labelledby="tab-hours">
     <div class="card cal-card">
       <div class="cal-head">
         <button class="nav-btn" id="prev" type="button" aria-label="Previous month"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
@@ -128,6 +135,30 @@
         <p class="hint" id="copy-hint"></p>
         <button class="btn-ghost" id="copy-week" type="button">Copy this week to next week</button>
       </div>
+    </div>
+    </div>
+
+    <!-- Prices: every option on her price list -->
+    <div class="tab-panel" id="t-prices" role="tabpanel" aria-labelledby="tab-prices" hidden>
+      <div class="card intro">
+        <p>Tap an option to change its name, price or time. Changes show on your site as soon as they save.</p>
+      </div>
+      <p class="msg msg-err" id="prices-err" role="alert" hidden><span id="prices-err-text"></span> <button class="link" id="prices-retry" type="button">Try again</button></p>
+      <div id="prices" aria-busy="true"><p class="wait card"><span class="spin" aria-hidden="true"></span>Loading your prices</p></div>
+    </div>
+
+    <!-- Photos: the gallery on her site -->
+    <div class="tab-panel" id="t-photos" role="tabpanel" aria-labelledby="tab-photos" hidden>
+      <div class="card intro">
+        <p>Add photos from your phone. They show on your site whole, never cropped. Tap a photo to change its caption, hide it or move it.</p>
+        <label class="btn upload" id="add-photos-btn">
+          <input type="file" id="add-photos" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple>
+          Add photos
+        </label>
+      </div>
+      <p class="msg msg-err" id="photos-err" role="alert" hidden><span id="photos-err-text"></span> <button class="link" id="photos-retry" type="button">Try again</button></p>
+      <div class="card photo-edit" id="photo-edit" hidden tabindex="-1" aria-labelledby="pe-title"></div>
+      <div class="photo-grid" id="photo-grid" aria-busy="true"><p class="wait card"><span class="spin" aria-hidden="true"></span>Loading your photos</p></div>
     </div>
   </section>
 </main>

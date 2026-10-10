@@ -144,14 +144,75 @@ var GALLERY = [
   $$('a', links).forEach(function (a) { a.addEventListener('click', function () { setMenu(false); }); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && links.classList.contains('open')) { setMenu(false); menuBtn.focus(); } });
 
+  /* ── live prices and photos from Kenya's owner panel (Supabase) ──
+     SERVICES and GALLERY above are the fallback. The last good live copy is kept in localStorage, so a
+     returning visitor sees her current prices at once. Every text field is cleaned before it reaches the page. */
+  var LIVE = window.KD_SUPABASE || {};
+  var LIVE_KEY = 'kd-live-v1', liveSig = '';
+  var SVC_IDS = SERVICES.map(function (s) { return s.id; });
+  var BUILT = {}; SERVICES.forEach(function (s) { BUILT[s.id] = s; });
+  var BUILT_PICS = GALLERY.map(function (g) { return g.f; });
+  var BUILT_GALLERY = GALLERY.slice();
+  var TAG_SET = ['Knotless', 'Braids', 'Fulani', 'Locs', 'Quick weaves', 'Kids'];
+  function clean(v, max) { return String(v == null ? '' : v).replace(/<[^>]*>/g, '').replace(/[<>"`\\]/g, '').replace(/&/g, 'and').replace(/\s+/g, ' ').trim().slice(0, max); }
+  function applyLive(data) {
+    if (!data || !Array.isArray(data.prices) || !Array.isArray(data.photos) || !LIVE.url) return false;
+    var by = {};
+    data.prices.forEach(function (o) {
+      if (!o || SVC_IDS.indexOf(o.service_id) < 0) return;
+      var n = clean(o.name, 40), d = clean(o.duration, 30), pr = Math.round(+o.price);
+      if (!n || !d || !(pr >= 0 && pr <= 2000)) return;
+      (by[o.service_id] = by[o.service_id] || []).push({ n: n, p: pr, d: d, plus: !!o.plus, design: !!o.design, dd: clean(o.design_duration, 30), so: +o.sort || 0 });
+    });
+    var svcs = SVC_IDS.filter(function (id) { return by[id] && by[id].length; }).map(function (id) {
+      var b = BUILT[id];
+      var opts = by[id].sort(function (x, y) { return x.so - y.so; }).map(function (o) { delete o.so; return o; });
+      return { id: id, img: b.img, pos: b.pos, name: b.name, desc: b.desc, long: b.long, options: opts };
+    });
+    if (!svcs.length) return false; // never empty the menu
+    var storage = LIVE.url.replace(/\/+$/, '') + '/storage/v1/object/public/gallery/';
+    var pics = data.photos.filter(function (g) { return g && !g.hidden && TAG_SET.indexOf(g.tag) > -1 && SVC_IDS.indexOf(g.book) > -1; })
+      .sort(function (x, y) { return (+x.sort || 0) - (+y.sort || 0); })
+      .map(function (g) {
+        var src = String(g.src), m = src.match(/^builtin:([a-z0-9-]+)$/), up = /^uploads\/[a-f0-9-]+$/.test(src);
+        var c = clean(g.caption, 80) || g.tag, s = g.tall ? 'tall' : '';
+        if (m && BUILT_PICS.indexOf(m[1]) > -1) return { f: m[1], t: g.tag, c: c, b: g.book, s: s };
+        if (up) return { u: storage + src, t: g.tag, c: c, b: g.book, s: s, w: Math.round(+g.width) || 1200, h: Math.round(+g.height) || 1600 };
+        return null;
+      }).filter(Boolean);
+    // keep the booking pick when it still exists
+    var cur = svc(), keep = cur && state.opt != null && cur.options[state.opt] ? cur.options[state.opt].n : null;
+    SERVICES.length = 0; svcs.forEach(function (x) { SERVICES.push(x); });
+    GALLERY.length = 0; (pics.length ? pics : BUILT_GALLERY).forEach(function (x) { GALLERY.push(x); });
+    var now = svc();
+    if (!now) { state.cat = null; state.opt = null; state.longHair = false; state.design = false; }
+    else if (state.opt != null) {
+      var k = keep == null ? -1 : now.options.map(function (o) { return o.n; }).indexOf(keep);
+      state.opt = k > -1 ? k : null; if (state.opt == null) state.design = false;
+    }
+    return true;
+  }
+  (function () { // last good copy, before the first render
+    if (!LIVE.url) return;
+    try {
+      var c = JSON.parse(localStorage.getItem(LIVE_KEY) || 'null');
+      if (c && c.url === LIVE.url && Date.now() - c.t < 30 * 864e5 && applyLive(c.data)) liveSig = JSON.stringify(c.data);
+    } catch (e) { /* storage blocked: built-in lists */ }
+  })();
+
   /* ── hero: starting prices ── */
   function low(s) { return Math.min.apply(null, s.options.map(function (o) { return o.p; })); }
-  $('#hero-rates').innerHTML = SERVICES.map(function (s) {
-    return '<li><a href="#p-' + s.id + '"><span class="hr-n">' + s.name + '</span><span class="hr-p">from ' + money(low(s)) + '</span></a></li>';
-  }).join('');
+  function renderRates() {
+    $('#hero-rates').innerHTML = SERVICES.map(function (s) {
+      return '<li><a href="#p-' + s.id + '"><span class="hr-n">' + s.name + '</span><span class="hr-p">from ' + money(low(s)) + '</span></a></li>';
+    }).join('');
+  }
+  renderRates();
 
   /* ── price list (rate card) ── */
-  var grid = $('#price-grid');
+  var grid = $('#price-grid'), catIO = null;
+  function renderPrices() {
+  grid.innerHTML = '';
   SERVICES.forEach(function (s, si) {
     var rows = s.options.map(function (o, i) {
       return '<button class="prow" data-cat="' + s.id + '" data-opt="' + i + '" aria-label="Book ' + s.name + ', ' + o.n + ', ' + money(o.p) + (o.plus ? ' and up' : '') + ', takes ' + o.d + '">' +
@@ -165,7 +226,9 @@ var GALLERY = [
       '<p class="desc">' + s.desc + '</p>' + rows +
       '<div class="pbook"><button class="tlink" data-cat="' + s.id + '">Book ' + s.name.toLowerCase() + '</button></div>';
     grid.appendChild(card);
+    if (catIO) catIO.observe(card);
   });
+  }
   grid.addEventListener('click', function (e) {
     var b = e.target.closest('[data-cat]'); if (!b) return;
     if (state.cat !== b.dataset.cat) state.longHair = false;
@@ -180,28 +243,41 @@ var GALLERY = [
 
   /* sticky photo beside the rate card follows the category in view (desktop only) */
   var frame = $('#rp-frame'), rpCap = $('#rp-cap');
-  frame.innerHTML = SERVICES.map(function (s, i) { return pic(base(s.img), '(max-width:900px) 10px, 34vw', 'alt="" loading="lazy" decoding="async"' + (i ? '' : ' class="on"')); }).join('');
+  function renderFrame() {
+    frame.innerHTML = SERVICES.map(function (s, i) { return pic(base(s.img), '(max-width:900px) 10px, 34vw', 'alt="" loading="lazy" decoding="async"' + (i ? '' : ' class="on"')); }).join('');
+    showCat(0);
+  }
   function showCat(i) {
+    if (!SERVICES[i]) return;
     $$('img', frame).forEach(function (im, k) { im.classList.toggle('on', k === i); });
     rpCap.innerHTML = CR + SERVICES[i].name;
   }
-  showCat(0);
   if ('IntersectionObserver' in window) {
-    var io = new IntersectionObserver(function (es) {
+    catIO = new IntersectionObserver(function (es) {
       es.forEach(function (en) { if (en.isIntersecting) showCat(+en.target.dataset.i); });
     }, { rootMargin: '-45% 0px -50% 0px' });
-    $$('.pcat', grid).forEach(function (c) { io.observe(c); });
   }
+  renderPrices(); renderFrame();
 
   /* ── gallery ── */
   var TAGS = ['All', 'Knotless', 'Braids', 'Fulani', 'Locs', 'Quick weaves', 'Kids'];
   var gal = $('#gallery'), gf = $('#g-filters'), curTag = 'All', lbIdx = 0, lastFocus = null;
   gf.innerHTML = TAGS.map(function (t) { return '<button class="gf" aria-pressed="' + (t === 'All') + '" data-tag="' + t + '">' + t + '</button>'; }).join('');
-  gal.innerHTML = GALLERY.map(function (g, i) {
-    var size = (g.s || '').indexOf('tall') > -1 ? ' tall' : '';
-    return '<button class="g-item' + size + '" data-i="' + i + '" data-tag="' + g.t + '" aria-label="View larger: ' + g.c + '">' +
-      pic(g.f, '(max-width:600px) 50vw, (max-width:900px) 33vw, 310px', 'alt="' + g.c + ' by ken.didit" loading="lazy" decoding="async"') + '<span class="g-tag">' + CR + g.c + '</span></button>';
-  }).join('');
+  /* a photo Kenya uploaded in the panel: two sizes in Supabase Storage, never cropped */
+  function upSet(g) { return g.u + '/800 800w, ' + g.u + '/1600 1600w'; }
+  function gpic(g, sizes, attrs) {
+    if (!g.u) return pic(g.f, sizes, attrs);
+    return '<img src="' + g.u + '/1600" srcset="' + upSet(g) + '" sizes="' + sizes + '" width="' + g.w + '" height="' + g.h + '" ' + attrs + '>';
+  }
+  function renderGallery() {
+    gal.innerHTML = GALLERY.map(function (g, i) {
+      var size = (g.s || '').indexOf('tall') > -1 ? ' tall' : '';
+      var show = curTag === 'All' || g.t === curTag;
+      return '<button class="g-item' + size + (show ? '' : ' hide') + '" data-i="' + i + '" data-tag="' + g.t + '" aria-label="View larger: ' + g.c + '"' + (curTag === 'All' ? '' : ' style="grid-row:auto;aspect-ratio:3/4"') + '>' +
+        gpic(g, '(max-width:600px) 50vw, (max-width:900px) 33vw, 310px', 'alt="' + g.c + ' by ken.didit" loading="lazy" decoding="async"') + '<span class="g-tag">' + CR + g.c + '</span></button>';
+    }).join('');
+  }
+  renderGallery();
   function visible() { return GALLERY.map(function (g, i) { return i; }).filter(function (i) { return curTag === 'All' || GALLERY[i].t === curTag; }); }
   gf.addEventListener('click', function (e) {
     var b = e.target.closest('[data-tag]'); if (!b) return;
@@ -223,7 +299,8 @@ var GALLERY = [
   function openLb(i) {
     if (!lb.classList.contains('open')) lastFocus = document.activeElement;
     lbIdx = i; var g = GALLERY[i];
-    lbImg.srcset = srcset(g.f); lbImg.src = 'img/' + g.f + '.jpg'; lbImg.alt = g.c + ' by ken.didit';
+    if (g.u) { lbImg.srcset = upSet(g); lbImg.src = g.u + '/1600'; } else { lbImg.srcset = srcset(g.f); lbImg.src = 'img/' + g.f + '.jpg'; }
+    lbImg.alt = g.c + ' by ken.didit';
     $('#lb-cap').textContent = g.c;
     $('#lb-book').dataset.cat = g.b;
     lb.classList.add('open'); lb.setAttribute('aria-hidden', 'false');
@@ -500,6 +577,24 @@ var GALLERY = [
   }
   function toMin(t) { var m = t.match(/(\d+):(\d+) ([AP])M/); return (+m[1] % 12) * 60 + (+m[2]) + (m[3] === 'P' ? 720 : 0); }
   if (liveSource === 'supabase') loadSupabase(); else loadSheet();
+
+  function loadLive() {
+    if (!LIVE.url || !LIVE.anonKey) return;
+    var root = LIVE.url.replace(/\/+$/, '') + '/rest/v1/', opt = { headers: { apikey: LIVE.anonKey }, cache: 'no-store' };
+    var get = function (q) { return fetch(root + q, opt).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }); };
+    Promise.all([
+      get('price_options?select=service_id,name,price,duration,plus,design,design_duration,sort&order=service_id.asc,sort.asc&limit=500'),
+      get('gallery_photos?select=src,tag,caption,book,tall,width,height,hidden,sort&order=sort.asc&limit=500')
+    ]).then(function (r) {
+      var data = { prices: r[0], photos: r[1] }, sig = JSON.stringify(data);
+      if (sig === liveSig || !applyLive(data)) return;
+      liveSig = sig;
+      try { localStorage.setItem(LIVE_KEY, JSON.stringify({ url: LIVE.url, t: Date.now(), data: data })); } catch (e) {}
+      renderRates(); renderPrices(); renderFrame(); renderGallery(); renderService(); update();
+      if (window.ScrollTrigger) ScrollTrigger.refresh();
+    }).catch(function () { /* keep what is showing */ });
+  }
+  loadLive();
 
   $('#cal-prev').addEventListener('click', function () { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); renderCal(); calAnim(-1); });
   $('#cal-next').addEventListener('click', function () { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); renderCal(); calAnim(1); });

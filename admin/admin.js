@@ -166,6 +166,8 @@
       if (res.error) throw res.error;
       if (res.data !== true) { $('#denied-as').textContent = prettyLogin(who); show('v-denied'); return; }
       show('v-panel');
+      tabLoaded = {};
+      startTabs();
       loadMonth();
     }).catch(function (e) {
       routed = '';
@@ -434,6 +436,341 @@
           : 'Nothing new to copy. ' + wk.charAt(0).toUpperCase() + wk.slice(1) + ' already has these times.';
       }).then(function (added) { replaceRows(added); });
     }).catch(function (e) { if (e && e.message !== 'busy' && stEl.className.indexOf('error') < 0) status('error', friendly(e)); });
+  });
+
+  /* ═══ Tabs: Hours, Prices, Photos ═══ */
+  var TABS = ['hours', 'prices', 'photos'], tabLoaded = {};
+  function showTab(name, focus) {
+    TABS.forEach(function (t) {
+      var b = $('#tab-' + t), on = t === name;
+      b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1;
+      $('#t-' + t).hidden = !on;
+    });
+    if (focus) $('#tab-' + name).focus();
+    document.querySelector('.top h1').textContent = 'Your ' + name;
+    document.title = 'Your ' + name + ' | ken.didit';
+    try { sessionStorage.setItem('kd-admin-tab', name); } catch (e) {}
+    if (name === 'prices' && !tabLoaded.prices) loadPrices();
+    if (name === 'photos' && !tabLoaded.photos) loadPhotos();
+  }
+  TABS.forEach(function (t, i) {
+    var b = $('#tab-' + t);
+    b.addEventListener('click', function () { showTab(t); });
+    b.addEventListener('keydown', function (e) {
+      var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if (!d) return;
+      e.preventDefault(); showTab(TABS[(i + d + TABS.length) % TABS.length], true);
+    });
+  });
+  function startTabs() {
+    var t = 'hours'; try { t = sessionStorage.getItem('kd-admin-tab') || 'hours'; } catch (e) {}
+    showTab(TABS.indexOf(t) > -1 ? t : 'hours');
+  }
+
+  // Text that goes on her public site: no markup characters, same rule as the database
+  function cleanText(v, max) { return String(v || '').replace(/<[^>]*>/g, '').replace(/[<>"`\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, max); }
+  var SERVICES = [['knotless', 'Knotless'], ['fulani', 'Fulani'], ['feedins', 'Feed-ins'], ['quickweave', 'Quick weaves'], ['male', "Men's styles"], ['kids', 'Kids styles']];
+  var SVC_NAME = {}; SERVICES.forEach(function (s) { SVC_NAME[s[0]] = s[1]; });
+  var STYLES = ['Knotless', 'Braids', 'Fulani', 'Locs', 'Quick weaves', 'Kids'];
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  /* ═══ Prices ═══ */
+  var prices = [], openOpt = null; // openOpt: option id, or 'new:<service>'
+  function loadPrices() {
+    $('#prices-err').hidden = true;
+    $('#prices').setAttribute('aria-busy', 'true');
+    return sb.from('price_options').select('*').order('service_id').order('sort').then(function (res) {
+      if (res.error) throw res.error;
+      prices = res.data || []; tabLoaded.prices = true;
+      $('#prices').removeAttribute('aria-busy');
+      renderPrices();
+    }).catch(function (e) {
+      $('#prices-err-text').textContent = 'Couldn\'t load your prices. ' + friendly(e).replace(' Nothing was saved.', '');
+      $('#prices-err').hidden = false; $('#prices').replaceChildren();
+    });
+  }
+  $('#prices-retry').addEventListener('click', loadPrices);
+  function optsOf(sid) { return prices.filter(function (o) { return o.service_id === sid; }).sort(function (a, b) { return a.sort - b.sort; }); }
+  function priceText(o) { return '$' + o.price + (o.plus ? '+' : ''); }
+  function renderPrices() {
+    var box = $('#prices'), frag = document.createDocumentFragment();
+    SERVICES.forEach(function (s) {
+      var list = optsOf(s[0]), card = el('section', 'card svc');
+      var head = el('div', 'svc-head'); head.appendChild(el('h2', null, s[1]));
+      head.appendChild(el('span', 'svc-from', list.length ? 'from $' + Math.min.apply(null, list.map(function (o) { return o.price; })) : 'Not on your site'));
+      card.appendChild(head);
+      var ul = el('ul', 'opts');
+      list.forEach(function (o, i) {
+        var li = el('li'), b = el('button', 'opt-row');
+        b.type = 'button'; b.dataset.id = o.id; b.setAttribute('aria-expanded', openOpt === o.id ? 'true' : 'false');
+        b.appendChild(el('span', 'on', o.name)); b.appendChild(el('span', 'op', priceText(o)));
+        b.appendChild(el('span', 'ot', o.duration + (o.design ? ' · design add-on' : '')));
+        li.appendChild(b);
+        if (openOpt === o.id) li.appendChild(optForm(s[0], o, i, list.length));
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+      if (openOpt === 'new:' + s[0]) card.appendChild(optForm(s[0], null, list.length, list.length));
+      else { var add = el('button', 'btn-ghost add-opt', 'Add an option'); add.type = 'button'; add.dataset.add = s[0]; card.appendChild(add); }
+      frag.appendChild(card);
+    });
+    box.replaceChildren(frag);
+  }
+  function field(label, input) { var w = el('div'); var l = el('label', null, label); l.htmlFor = input.id; w.appendChild(l); w.appendChild(input); return w; }
+  function optForm(sid, o, idx, count) {
+    var f = el('form', 'opt-form'); f.noValidate = true; f.dataset.sid = sid; if (o) f.dataset.id = o.id;
+    f.appendChild(el('h3', null, o ? 'Change ' + o.name : 'New ' + SVC_NAME[sid] + ' option'));
+    var n = el('input'); n.type = 'text'; n.id = 'of-name'; n.maxLength = 40; n.value = o ? o.name : ''; n.autocomplete = 'off';
+    f.appendChild(field('Name', n));
+    var pw = el('div', 'money'), p = el('input'); p.type = 'text'; p.inputMode = 'numeric'; p.id = 'of-price'; p.value = o ? o.price : ''; p.autocomplete = 'off';
+    pw.appendChild(p); var pl = el('label', null, 'Price'); pl.htmlFor = 'of-price'; var pwrap = el('div'); pwrap.appendChild(pl); pwrap.appendChild(pw); f.appendChild(pwrap);
+    var d = el('input'); d.type = 'text'; d.id = 'of-dur'; d.maxLength = 30; d.value = o ? o.duration : ''; d.placeholder = 'Like 2 hrs 30 min'; d.autocomplete = 'off';
+    f.appendChild(field('How long it takes', d));
+    var c1 = el('label', 'check'), plus = el('input'); plus.type = 'checkbox'; plus.id = 'of-plus'; plus.checked = !!(o && o.plus);
+    c1.appendChild(plus); c1.appendChild(document.createTextNode('Starting price (shows a + after it)')); f.appendChild(c1);
+    var c2 = el('label', 'check'), des = el('input'); des.type = 'checkbox'; des.id = 'of-design'; des.checked = !!(o && o.design);
+    c2.appendChild(des); c2.appendChild(document.createTextNode('Offer a design add-on (+$10)')); f.appendChild(c2);
+    var dd = el('input'); dd.type = 'text'; dd.id = 'of-dd'; dd.maxLength = 30; dd.value = o && o.design_duration ? o.design_duration : ''; dd.placeholder = 'Time with a design'; dd.autocomplete = 'off';
+    var ddw = field('Time with a design', dd); ddw.hidden = !des.checked; f.appendChild(ddw);
+    des.addEventListener('change', function () { ddw.hidden = !des.checked; });
+    var err = el('p', 'field-err'); err.setAttribute('role', 'alert'); err.hidden = true; f.appendChild(err);
+    var row = el('div', 'row'), sv = el('button', 'btn', 'Save'), cn = el('button', 'btn-ghost', 'Cancel');
+    sv.type = 'submit'; cn.type = 'button'; cn.dataset.cancel = '1'; row.appendChild(sv); row.appendChild(cn); f.appendChild(row);
+    if (o) {
+      var r3 = el('div', 'row3'), up = el('button', null, '\u2191 Up'), dn = el('button', null, '\u2193 Down'), rm = el('button', 'rm-btn', 'Remove');
+      up.setAttribute('aria-label', 'Move ' + o.name + ' up'); dn.setAttribute('aria-label', 'Move ' + o.name + ' down');
+      [up, dn, rm].forEach(function (b) { b.type = 'button'; });
+      up.dataset.move = '-1'; dn.dataset.move = '1'; rm.dataset.remove = '1';
+      up.disabled = idx === 0; dn.disabled = idx >= count - 1;
+      r3.appendChild(up); r3.appendChild(dn); r3.appendChild(rm); f.appendChild(r3);
+    }
+    setTimeout(function () { n.focus(); f.scrollIntoView({ behavior: document.documentElement.classList.contains('rm') ? 'auto' : 'smooth', block: 'center' }); }, 30);
+    return f;
+  }
+  $('#prices').addEventListener('click', function (e) {
+    var row = e.target.closest('.opt-row'), add = e.target.closest('[data-add]'), f = e.target.closest('.opt-form');
+    if (row) { openOpt = openOpt === row.dataset.id ? null : row.dataset.id; renderPrices(); return; }
+    if (add) { openOpt = 'new:' + add.dataset.add; renderPrices(); return; }
+    if (!f) return;
+    var b = e.target.closest('button'); if (!b) return;
+    var o = prices.filter(function (x) { return x.id === f.dataset.id; })[0];
+    if (b.dataset.cancel) { openOpt = null; renderPrices(); return; }
+    if (b.dataset.move && o) {
+      var list = optsOf(o.service_id), i = list.indexOf(o), j = i + Number(b.dataset.move), other = list[j]; if (!other) return;
+      // Give every option in this service a clean order, with the two swapped
+      list[i] = other; list[j] = o;
+      var rows = list.map(function (x, k) { return { id: x.id, service_id: x.service_id, name: x.name, price: x.price, duration: x.duration, plus: x.plus, design: x.design, design_duration: x.design_duration, sort: (k + 1) * 10 }; });
+      save('Moving ' + o.name, function () { return sb.from('price_options').upsert(rows).select(); }, 'Saved. ' + o.name + ' moved.').then(mergePrices, function () {});
+      return;
+    }
+    if (b.dataset.remove && o) {
+      var last = optsOf(o.service_id).length === 1;
+      if (!window.confirm('Remove ' + o.name + ' (' + priceText(o) + ') from ' + SVC_NAME[o.service_id] + '?' + (last ? '\nIt is the last option, so ' + SVC_NAME[o.service_id] + ' leaves your site.' : ''))) return;
+      save('Removing ' + o.name, function () { return sb.from('price_options').delete().eq('id', o.id).select(); }, 'Saved. ' + o.name + ' removed.').then(function () {
+        prices = prices.filter(function (x) { return x.id !== o.id; }); openOpt = null; renderPrices();
+      }, function () {});
+    }
+  });
+  $('#prices').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target, sid = f.dataset.sid, id = f.dataset.id, err = f.querySelector('.field-err');
+    var name = cleanText(f.querySelector('#of-name').value, 40), dur = cleanText(f.querySelector('#of-dur').value, 30);
+    var raw = f.querySelector('#of-price').value.replace(/[$,\s]/g, ''), price = /^\d{1,4}$/.test(raw) ? +raw : NaN;
+    var design = f.querySelector('#of-design').checked, dd = cleanText(f.querySelector('#of-dd').value, 30);
+    var bad = !name ? ['#of-name', 'Give this option a name.'] : !(price >= 0 && price <= 2000) ? ['#of-price', 'Type the price in whole dollars, like 180.'] : !dur ? ['#of-dur', 'Say how long it takes, like 2 hrs 30 min.'] : null;
+    if (bad) { err.textContent = bad[1]; err.hidden = false; f.querySelector(bad[0]).setAttribute('aria-invalid', 'true'); f.querySelector(bad[0]).focus(); return; }
+    var row = { service_id: sid, name: name, price: price, duration: dur, plus: f.querySelector('#of-plus').checked, design: design, design_duration: design ? (dd || null) : null };
+    if (id) {
+      save('Saving ' + name, function () { return sb.from('price_options').update(row).eq('id', id).select(); }, 'Saved. ' + name + ' is ' + priceText(row) + ' on your site.')
+        .then(function (d) { openOpt = null; mergePrices(d); }, function () {});
+    } else {
+      var list = optsOf(sid); row.sort = list.length ? list[list.length - 1].sort + 10 : 10;
+      save('Adding ' + name, function () { return sb.from('price_options').insert(row).select(); }, 'Saved. ' + name + ' is on your site.')
+        .then(function (d) { openOpt = null; mergePrices(d); }, function () {});
+    }
+  });
+  // A field marked wrong clears as soon as she edits it
+  ['#prices', '#photo-edit'].forEach(function (sel) {
+    $(sel).addEventListener('input', function (e) {
+      if (e.target.getAttribute('aria-invalid')) e.target.removeAttribute('aria-invalid');
+      var f = e.target.closest('form'), er = f && f.querySelector('.field-err'); if (er) er.hidden = true;
+    });
+  });
+  function mergePrices(rows) {
+    rows.forEach(function (r) { var k = prices.map(function (x) { return x.id; }).indexOf(r.id); if (k > -1) prices[k] = r; else prices.push(r); });
+    renderPrices();
+  }
+
+  /* ═══ Photos ═══ */
+  var photos = [], openPhoto = null;
+  var STORE = (cfg.url || '').replace(/\/+$/, '') + '/storage/v1/object/public/gallery/';
+  function thumb(p) { var m = p.src.match(/^builtin:(.+)$/); return m ? '/img/w/' + m[1] + '-400.webp' : STORE + p.src + '/800'; }
+  function large(p) { var m = p.src.match(/^builtin:(.+)$/); return m ? '/img/w/' + m[1] + '-800.webp' : STORE + p.src + '/1600'; }
+  function loadPhotos() {
+    $('#photos-err').hidden = true;
+    return sb.from('gallery_photos').select('*').order('sort').then(function (res) {
+      if (res.error) throw res.error;
+      photos = res.data || []; tabLoaded.photos = true;
+      $('#photo-grid').removeAttribute('aria-busy');
+      renderPhotos();
+    }).catch(function (e) {
+      $('#photos-err-text').textContent = 'Couldn\'t load your photos. ' + friendly(e).replace(' Nothing was saved.', '');
+      $('#photos-err').hidden = false; $('#photo-grid').replaceChildren();
+    });
+  }
+  $('#photos-retry').addEventListener('click', loadPhotos);
+  function sorted() { return photos.slice().sort(function (a, b) { return a.sort - b.sort; }); }
+  function renderPhotos() {
+    var grid = $('#photo-grid'), frag = document.createDocumentFragment(), list = sorted();
+    if (!list.length) frag.appendChild(el('p', 'card empty', 'No photos yet. Tap Add photos to put your work on your site.'));
+    list.forEach(function (p) {
+      var b = el('button', 'ph' + (p.hidden ? ' is-hidden' : '')); b.type = 'button'; b.dataset.id = p.id;
+      b.setAttribute('aria-pressed', openPhoto === p.id ? 'true' : 'false');
+      b.setAttribute('aria-label', (p.caption || p.tag) + (p.hidden ? ', hidden from your site' : '') + '. Tap to change.');
+      var w = el('span', 'ph-img'), im = el('img'); im.src = thumb(p); im.alt = ''; im.loading = 'lazy'; im.decoding = 'async'; w.appendChild(im); b.appendChild(w);
+      if (p.hidden) b.appendChild(el('span', 'ph-badge', 'Hidden'));
+      b.appendChild(el('span', 'ph-c', p.caption || p.tag)); b.appendChild(el('span', 'ph-t', p.tag));
+      frag.appendChild(b);
+    });
+    grid.replaceChildren(frag);
+    renderPhotoEdit();
+  }
+  $('#photo-grid').addEventListener('click', function (e) {
+    var b = e.target.closest('.ph'); if (!b) return;
+    openPhoto = openPhoto === b.dataset.id ? null : b.dataset.id; renderPhotos();
+    if (openPhoto) { var pe = $('#photo-edit'); pe.scrollIntoView({ behavior: document.documentElement.classList.contains('rm') ? 'auto' : 'smooth', block: 'start' }); pe.focus({ preventScroll: true }); }
+  });
+  function opt(sel, value, label, cur) { var o = el('option', null, label); o.value = value; if (value === cur) o.selected = true; sel.appendChild(o); }
+  function renderPhotoEdit() {
+    var box = $('#photo-edit'), p = photos.filter(function (x) { return x.id === openPhoto; })[0];
+    if (!p) { box.hidden = true; box.replaceChildren(); return; }
+    var list = sorted(), i = list.indexOf(p), up = p.src.indexOf('uploads/') === 0;
+    var f = el('form'); f.noValidate = true; f.dataset.id = p.id;
+    var h = el('h2', null, p.caption || 'New photo'); h.id = 'pe-title'; f.appendChild(h);
+    var iw = el('div', 'pe-img'), im = el('img'); im.src = large(p); im.alt = 'The photo you are changing'; iw.appendChild(im); f.appendChild(iw);
+    var c = el('input'); c.type = 'text'; c.id = 'pe-cap'; c.maxLength = 80; c.value = p.caption; c.placeholder = 'Like Small knotless braids'; c.autocomplete = 'off';
+    f.appendChild(field('Caption', c));
+    var st = el('select'); st.id = 'pe-tag'; STYLES.forEach(function (s) { opt(st, s, s, p.tag); }); f.appendChild(field('Style filter', st));
+    var bk = el('select'); bk.id = 'pe-book'; SERVICES.forEach(function (s) { opt(bk, s[0], s[1], p.book); }); f.appendChild(field('"Book this look" opens', bk));
+    var tg = el('label', 'toggle'), sh = el('input'); sh.type = 'checkbox'; sh.id = 'pe-show'; sh.checked = !p.hidden;
+    tg.appendChild(sh); tg.appendChild(document.createTextNode('Show on my site')); f.appendChild(tg);
+    var err = el('p', 'field-err'); err.setAttribute('role', 'alert'); err.hidden = true; f.appendChild(err);
+    var row = el('div', 'row'), sv = el('button', 'btn', 'Save'), cn = el('button', 'btn-ghost', 'Close');
+    sv.type = 'submit'; cn.type = 'button'; cn.dataset.close = '1'; row.appendChild(sv); row.appendChild(cn); f.appendChild(row);
+    var r3 = el('div', 'row3'), ea = el('button', null, 'Earlier'), la = el('button', null, 'Later'), rm = el('button', 'rm-btn', up ? 'Delete' : 'Hide');
+    [ea, la, rm].forEach(function (b) { b.type = 'button'; });
+    ea.dataset.move = '-1'; la.dataset.move = '1'; rm.dataset.remove = '1';
+    ea.disabled = i === 0; la.disabled = i === list.length - 1; rm.disabled = !up && p.hidden;
+    r3.appendChild(ea); r3.appendChild(la); r3.appendChild(rm); f.appendChild(r3);
+    if (!up) f.appendChild(el('p', 'hint', 'This photo came with your site, so you hide it instead of deleting it.'));
+    box.replaceChildren(f); box.hidden = false;
+  }
+  $('#photo-edit').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var p = photos.filter(function (x) { return x.id === openPhoto; })[0]; if (!p) return;
+    if (b.dataset.close) { openPhoto = null; renderPhotos(); return; }
+    if (b.dataset.move) {
+      var list = sorted(), i = list.indexOf(p), j = i + Number(b.dataset.move); if (!list[j]) return;
+      var a = list[i]; list[i] = list[j]; list[j] = a;
+      var rows = list.map(function (x, k) { return { id: x.id, src: x.src, tag: x.tag, caption: x.caption, book: x.book, tall: x.tall, width: x.width, height: x.height, hidden: x.hidden, sort: (k + 1) * 10 }; });
+      save('Moving photo', function () { return sb.from('gallery_photos').upsert(rows).select(); }, 'Saved. Photo moved ' + (b.dataset.move === '-1' ? 'earlier.' : 'later.')).then(mergePhotos, function () {});
+      return;
+    }
+    if (b.dataset.remove) {
+      if (p.src.indexOf('uploads/') !== 0) {
+        save('Hiding photo', function () { return sb.from('gallery_photos').update({ hidden: true }).eq('id', p.id).select(); }, 'Saved. The photo is hidden from your site.').then(mergePhotos, function () {});
+        return;
+      }
+      if (!window.confirm('Delete this photo from your site for good?')) return;
+      save('Deleting photo', function () { return sb.from('gallery_photos').delete().eq('id', p.id).select(); }, 'Saved. Photo deleted.').then(function () {
+        photos = photos.filter(function (x) { return x.id !== p.id; }); openPhoto = null; renderPhotos();
+        // The site no longer lists it. Clear the files too; a leftover file is harmless if this fails.
+        sb.storage.from('gallery').remove([p.src + '/1600', p.src + '/800']).catch(function () {});
+      }, function () {});
+    }
+  });
+  $('#photo-edit').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target, p = photos.filter(function (x) { return x.id === f.dataset.id; })[0]; if (!p) return;
+    var row = { caption: cleanText(f.querySelector('#pe-cap').value, 80), tag: f.querySelector('#pe-tag').value, book: f.querySelector('#pe-book').value, hidden: !f.querySelector('#pe-show').checked };
+    save('Saving photo', function () { return sb.from('gallery_photos').update(row).eq('id', p.id).select(); },
+      row.hidden ? 'Saved. The photo is hidden from your site.' : 'Saved. The photo is on your site.').then(function (d) { openPhoto = null; mergePhotos(d); }, function () {});
+  });
+  function mergePhotos(rows) {
+    rows.forEach(function (r) { var k = photos.map(function (x) { return x.id; }).indexOf(r.id); if (k > -1) photos[k] = r; else photos.push(r); });
+    renderPhotos();
+  }
+
+  // Shrink a photo on the phone before upload: longest side max px, the whole picture kept (never cropped)
+  function openImage(file) {
+    if (window.createImageBitmap) return createImageBitmap(file, { imageOrientation: 'from-image' }).catch(function () { return viaImg(file); });
+    return viaImg(file);
+  }
+  function viaImg(file) {
+    return new Promise(function (res, rej) {
+      var u = URL.createObjectURL(file), im = new Image();
+      im.onload = function () { res(im); setTimeout(function () { URL.revokeObjectURL(u); }, 1000); };
+      im.onerror = function () { URL.revokeObjectURL(u); rej(new Error('This photo type can\'t be opened here. Try a JPG or a screenshot of it.')); };
+      im.src = u;
+    });
+  }
+  function shrink(img, max) {
+    var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height, k = Math.min(1, max / Math.max(w, h));
+    var c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+    var x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(img, 0, 0, c.width, c.height);
+    return new Promise(function (res, rej) {
+      c.toBlob(function (b) {
+        // Raw bytes plus their type: the upload then carries the image's own content type
+        var done = function (x) { x.arrayBuffer().then(function (buf) { res({ buf: buf, type: x.type, w: c.width, h: c.height }); }, rej); };
+        if (b && b.type === 'image/webp') return done(b);
+        c.toBlob(function (j) { j ? done(j) : rej(new Error('Couldn\'t prepare this photo.')); }, 'image/jpeg', 0.86);
+      }, 'image/webp', 0.84);
+    });
+  }
+  function newId() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, function () { return (Math.random() * 16 | 0).toString(16); });
+  }
+  $('#add-photos').addEventListener('change', function () {
+    var files = Array.prototype.slice.call(this.files || []); this.value = '';
+    if (!files.length || busy) return;
+    var added = [], n = files.length;
+    busy = true; lock(true); $('#add-photos').disabled = true;
+    var first = sorted()[0], top = first ? first.sort : 0;
+    files.reduce(function (chain, file, k) {
+      return chain.then(function () {
+        var label = n > 1 ? ' ' + (k + 1) + ' of ' + n : '', id = newId(), base = 'uploads/' + id, big, small;
+        status('saving', 'Getting photo' + label + ' ready');
+        return openImage(file).then(function (img) {
+          return shrink(img, 1600).then(function (r) { big = r; return shrink(img, 800); }).then(function (r) { small = r; if (img.close) img.close(); });
+        }).then(function () {
+          status('saving', 'Uploading photo' + label);
+          var o = { cacheControl: '31536000', upsert: false };
+          return sb.storage.from('gallery').upload(base + '/1600', big.buf, Object.assign({ contentType: big.type }, o)).then(function (r) {
+            if (r.error) throw r.error;
+            return sb.storage.from('gallery').upload(base + '/800', small.buf, Object.assign({ contentType: small.type }, o));
+          }).then(function (r) { if (r.error) throw r.error; });
+        }).then(function () {
+          top -= 10;
+          return sb.from('gallery_photos').insert({ src: base, tag: 'Braids', caption: '', book: 'male', tall: big.h / big.w > 1.45, width: big.w, height: big.h, hidden: false, sort: top }).select()
+            .then(function (r) {
+              if (r.error) { sb.storage.from('gallery').remove([base + '/1600', base + '/800']).catch(function () {}); throw r.error; }
+              if (!r.data || !r.data.length) throw { message: 'not authenticated', code: 'PGRST301' };
+              added.push(r.data[0]);
+            });
+        });
+      });
+    }, Promise.resolve()).then(function () {
+      status('saved', 'Saved. ' + (n > 1 ? n + ' photos are' : 'Your photo is') + ' on your site. Add a caption next.');
+    }).catch(function (e) {
+      var m = String((e && e.message) || '');
+      status('error', (added.length ? added.length + ' of ' + n + ' saved. ' : '') + (/opened here|prepare/.test(m) ? m : /mime|type/i.test(m) ? 'That file type isn\'t allowed. Use a photo.' : /size|large/i.test(m) ? 'That photo is too big. Try a smaller one.' : friendly(e)));
+    }).finally(function () {
+      busy = false; lock(false); $('#add-photos').disabled = false;
+      added.forEach(function (r) { photos.push(r); });
+      if (added.length) openPhoto = added[added.length - 1].id;
+      renderPhotos();
+      if (openPhoto) $('#photo-edit').scrollIntoView({ block: 'start' });
+    });
   });
 
   // Kick off: show the saved sign-in, or the sign-in form
