@@ -41,28 +41,26 @@
 
   <section class="card view" id="v-signin" hidden>
     <h2>Sign in</h2>
-    <p>Type your email and we send you a sign-in link. No password to remember.</p>
+    <p>Use your phone number and your panel password. Your phone stays signed in after that.</p>
     <p class="msg msg-err" id="signin-err" role="alert" hidden></p>
     <form id="signin-form" novalidate>
-      <label for="email">Your email</label>
-      <input id="email" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" required>
-      <p class="field-err" id="email-err" hidden></p>
-      <button class="btn" id="signin-btn" type="submit">Email me a sign-in link</button>
+      <label for="phone">Your phone number</label>
+      <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="username" placeholder="(414) 555-0123" required>
+      <p class="field-err" id="phone-err" hidden></p>
+      <label for="password">Password</label>
+      <div class="pw">
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button class="pw-show" id="pw-show" type="button" aria-pressed="false" aria-controls="password">Show</button>
+      </div>
+      <p class="field-err" id="password-err" hidden></p>
+      <button class="btn" id="signin-btn" type="submit">Sign in</button>
     </form>
-  </section>
-
-  <section class="card view" id="v-sent" hidden>
-    <h2>Check your email</h2>
-    <p>We sent a sign-in link to <b id="sent-to"></b>. Open it on this phone and you land right back here, signed in.</p>
-    <p class="hint">No email after a minute? Check spam, or send a new link.</p>
-    <p class="msg msg-err" id="sent-err" role="alert" hidden></p>
-    <button class="btn" id="resend" type="button">Send a new link</button>
-    <button class="btn-ghost" id="other-email" type="button">Use a different email</button>
+    <p class="hint forgot">Forgot your password? Text Ty to reset it.</p>
   </section>
 
   <section class="card view" id="v-denied" hidden>
-    <h2>This email can't change hours</h2>
-    <p>You signed in as <b id="denied-as"></b>, but only Kenya's email can edit the schedule. Sign out and use her email.</p>
+    <h2>This account can't change hours</h2>
+    <p>You signed in as <b id="denied-as"></b>, but only Kenya's account can edit the schedule. Sign out and sign in with her phone number.</p>
     <button class="btn" id="denied-out" type="button">Sign out</button>
   </section>
 

@@ -1,5 +1,8 @@
 /* ken.didit owner panel.
-   Kenya signs in with an email link (Supabase Auth, no passwords anywhere), then opens or closes days,
+   Kenya signs in with her phone number and a password she picked. The password lives only in Supabase Auth
+   (stored hashed), never in this code. Supabase's own phone sign-in needs a paid SMS provider, so her account
+   uses a login built from her number (p4145550123@<loginDomain>); no email is ever sent to it.
+   Then she opens or closes days,
    adds or removes times, marks times booked, and copies a week forward.
    Row Level Security in supabase/setup.sql is the real lock: this page only asks, the database decides.
    "Saved" shows only after Supabase returns the changed rows. Anything else shows an error. */
@@ -8,7 +11,7 @@
 
   var $ = function (s) { return document.querySelector(s); };
   var cfg = window.KD_SUPABASE || {};
-  var VIEWS = ['v-off', 'v-wait', 'v-signin', 'v-sent', 'v-denied', 'v-load-err', 'v-panel'];
+  var VIEWS = ['v-off', 'v-wait', 'v-signin', 'v-denied', 'v-load-err', 'v-panel'];
   function show(id) {
     VIEWS.forEach(function (v) { var el = document.getElementById(v); if (el) el.hidden = v !== id; });
     $('#signout').hidden = id !== 'v-panel' && id !== 'v-load-err';
@@ -16,17 +19,10 @@
 
   if (!cfg.url || !cfg.anonKey || !window.supabase) { show('v-off'); return; }
 
-  // An error the sign-in link brought back (expired or already used)
-  var hashErr = '';
-  (function () {
-    var h = new URLSearchParams(location.hash.replace(/^#/, ''));
-    var q = new URLSearchParams(location.search);
-    var d = h.get('error_description') || q.get('error_description');
-    if (d) hashErr = /expired|invalid/i.test(d) ? 'That sign-in link expired or was already used. Send a new one.' : 'Sign-in failed: ' + d;
-  })();
+  var LOGIN_DOMAIN = cfg.loginDomain || 'kenyastyles.vercel.app';
 
   var sb = window.supabase.createClient(cfg.url, cfg.anonKey, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit' }
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
   });
 
   /* ─── Dates and times ─── */
@@ -104,53 +100,52 @@
     });
   }
 
-  /* ─── Sign in ─── */
-  var lastEmail = '';
-  function validEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
-  function sendLink(email, errEl, btn) {
-    errEl.hidden = true;
-    btn.disabled = true;
-    var label = btn.textContent; btn.textContent = 'Sending';
-    return sb.auth.signInWithOtp({
-      email: email,
-      options: { shouldCreateUser: false, emailRedirectTo: location.origin + location.pathname }
-    }).then(function (res) {
-      if (res.error) throw res.error;
-      lastEmail = email;
-      $('#sent-to').textContent = email;
-      show('v-sent');
-      cooldown();
-    }).catch(function (e) {
-      var m = String((e && e.message) || '');
-      errEl.textContent = (e && e.status === 429) || /rate|too many|seconds/i.test(m)
-        ? 'Too many links sent. Wait a few minutes, then try again.'
-        : /signup|not allowed|not found/i.test(m)
-          ? 'This email is not set up for the panel. Use the email Kenya gave Ty.'
-          : !navigator.onLine || /fetch|network/i.test(m)
-            ? 'Could not reach the server. Check your connection and try again.'
-            : 'Could not send the link: ' + m;
-      errEl.hidden = false;
-    }).finally(function () { btn.disabled = false; btn.textContent = label; });
+  /* ─── Sign in: phone number + password ─── */
+  // '(414) 555-0123', '414.555.0123' or '+1 414 555 0123' -> '4145550123'
+  function phoneDigits(v) {
+    var d = String(v || '').replace(/\D/g, '');
+    if (d.length === 11 && d.charAt(0) === '1') d = d.slice(1);
+    return d.length === 10 ? d : '';
   }
+  function loginFor(digits) { return 'p' + digits + '@' + LOGIN_DOMAIN; }
+  function prettyLogin(login) {
+    var m = String(login || '').match(/^p(\d{3})(\d{3})(\d{4})@/);
+    return m ? '(' + m[1] + ') ' + m[2] + '-' + m[3] : (login || 'this account');
+  }
+  function fieldErr(input, el, text) {
+    el.textContent = text; el.hidden = !text;
+    if (text) input.setAttribute('aria-invalid', 'true'); else input.removeAttribute('aria-invalid');
+  }
+  $('#pw-show').addEventListener('click', function () {
+    var pw = $('#password'), on = pw.type === 'password';
+    pw.type = on ? 'text' : 'password';
+    this.textContent = on ? 'Hide' : 'Show';
+    this.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
   $('#signin-form').addEventListener('submit', function (e) {
     e.preventDefault();
-    var inp = $('#email'), v = inp.value.trim().toLowerCase(), fe = $('#email-err');
-    if (!validEmail(v)) {
-      fe.textContent = v ? 'That email doesn\'t look right. Check it and try again.' : 'Type your email first.';
-      fe.hidden = false; inp.setAttribute('aria-invalid', 'true'); inp.focus(); return;
-    }
-    fe.hidden = true; inp.removeAttribute('aria-invalid');
-    sendLink(v, $('#signin-err'), $('#signin-btn'));
+    var ph = $('#phone'), pw = $('#password'), digits = phoneDigits(ph.value), err = $('#signin-err'), btn = $('#signin-btn');
+    err.hidden = true;
+    fieldErr(ph, $('#phone-err'), !ph.value.trim() ? 'Type your phone number first.' : !digits ? 'Use your 10-digit number, like (414) 555-0123.' : '');
+    fieldErr(pw, $('#password-err'), pw.value ? '' : 'Type your password.');
+    if (!digits) { ph.focus(); return; }
+    if (!pw.value) { pw.focus(); return; }
+    btn.disabled = true; btn.textContent = 'Signing in';
+    sb.auth.signInWithPassword({ email: loginFor(digits), password: pw.value }).then(function (res) {
+      if (res.error) throw res.error;
+      pw.value = '';
+    }).catch(function (e) {
+      var m = String((e && e.message) || ''), st = e && e.status;
+      err.textContent = st === 429 || /rate|too many/i.test(m)
+        ? 'Too many tries. Wait a few minutes, then try again.'
+        : st === 400 || /invalid login|credentials/i.test(m)
+          ? 'That phone number and password don\'t match. Check both and try again.'
+          : !navigator.onLine || /fetch|network/i.test(m)
+            ? 'Could not reach the server. Check your connection and try again.'
+            : 'Could not sign in: ' + m;
+      err.hidden = false;
+    }).finally(function () { btn.disabled = false; btn.textContent = 'Sign in'; });
   });
-  var cdTimer = 0;
-  function cooldown() {
-    var b = $('#resend'), left = 60;
-    clearInterval(cdTimer); b.disabled = true;
-    var tick = function () { b.textContent = left > 0 ? 'Send a new link (' + left + 's)' : 'Send a new link'; if (left-- <= 0) { clearInterval(cdTimer); b.disabled = false; } };
-    tick(); cdTimer = setInterval(tick, 1000);
-  }
-  $('#resend').addEventListener('click', function () { sendLink(lastEmail, $('#sent-err'), $('#resend')); });
-  $('#other-email').addEventListener('click', function () { show('v-signin'); $('#email').focus(); });
 
   function signOut() {
     status('saving', 'Signing out');
@@ -162,16 +157,15 @@
   /* ─── Who is signed in ─── */
   var routed = '';
   function route(session) {
-    if (!session) { routed = ''; show('v-signin'); if (hashErr) { $('#signin-err').textContent = hashErr; $('#signin-err').hidden = false; hashErr = ''; } return; }
+    if (!session) { routed = ''; show('v-signin'); return; }
     var who = session.user && session.user.email;
     if (routed === who) return;
     routed = who;
     show('v-wait');
     sb.rpc('is_owner').then(function (res) {
       if (res.error) throw res.error;
-      if (res.data !== true) { $('#denied-as').textContent = who || 'this account'; show('v-denied'); return; }
+      if (res.data !== true) { $('#denied-as').textContent = prettyLogin(who); show('v-denied'); return; }
       show('v-panel');
-      if (location.href.indexOf('#') > -1) history.replaceState(null, '', location.pathname);
       loadMonth();
     }).catch(function (e) {
       routed = '';
@@ -443,8 +437,5 @@
   });
 
   // Kick off: show the saved sign-in, or the sign-in form
-  sb.auth.getSession().then(function (r) {
-    if (r.error && !hashErr) hashErr = 'Sign-in failed. Send a new link.';
-    route(r.data && r.data.session);
-  });
+  sb.auth.getSession().then(function (r) { route(r.data && r.data.session); });
 })();

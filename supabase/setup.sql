@@ -1,8 +1,9 @@
 -- ken.didit availability: paste this whole file into Supabase > SQL Editor > New query, then Run.
 -- Safe to run again: it only creates what is missing and resets the policies.
 --
--- Before you run it, change kenya@example.com at the bottom to Kenya's real email.
--- Do not commit her email back into this file. The repo is public.
+-- Kenya signs in with her phone number and a password. Her account's login is built from that number:
+-- p + the 10 digits + @kenyastyles.vercel.app. The line at the bottom uses the booking number already on her
+-- site, (414) 388-1130. If she will type a different number, change the digits there before you run it.
 
 -- 1. The table the booking calendar reads
 create table if not exists public.availability (
@@ -63,5 +64,5 @@ revoke all on public.availability from anon;
 grant select (id, date, start_time, end_time, status) on public.availability to anon;
 grant select, insert, update, delete on public.availability to authenticated;
 
--- 4. Kenya's email (lowercase). Replace the example before you run this.
-insert into public.owners (email) values ('kenya@example.com') on conflict do nothing;
+-- 4. Kenya's login (lowercase). Create the same login under Authentication > Users > Add user.
+insert into public.owners (email) values ('p4143881130@kenyastyles.vercel.app') on conflict do nothing;
