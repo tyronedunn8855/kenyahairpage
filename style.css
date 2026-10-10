@@ -68,8 +68,10 @@ h1,h2,h3{font-family:var(--disp);font-weight:600;letter-spacing:-.025em;font-var
 /* ── nav ── */
 nav{position:fixed;z-index:100;top:0;left:0;right:0;background:#fff;border-bottom:1px solid var(--line)}
 .nav-in{max-width:1280px;margin:0 auto;height:var(--nav-h);display:flex;align-items:center;gap:28px;padding:0 clamp(16px,4vw,48px)}
-.brand{display:flex;align-items:baseline;gap:12px;text-decoration:none;padding:10px 0}
-.brand-k{font-family:var(--disp);font-size:25px;font-weight:600;letter-spacing:-.03em;color:var(--ink);line-height:1}
+.brand{display:flex;align-items:center;gap:14px;text-decoration:none;padding:10px 0}
+.sprite{position:absolute;width:0;height:0;overflow:hidden}
+/* logo: plaited-k wordmark, beads in lilac. Sizes by height; width follows the viewBox. */
+.brand-logo{display:block;height:28px;width:auto;aspect-ratio:6756/1524;color:var(--ink);--logo-bead:var(--l600);align-self:center}
 .brand-h{font-family:var(--mono);font-size:12.5px;color:var(--ink2)}
 .nav-links{display:flex;gap:2px;margin-left:auto}
 .nav-links a{display:flex;align-items:center;min-height:44px;text-decoration:none;font-size:15px;font-weight:500;padding:0 12px;border-radius:8px;color:var(--ink2);transition:color .2s,background .2s}
@@ -331,7 +333,8 @@ h2{font-size:clamp(38px,5vw,72px);line-height:1;text-wrap:balance}
 footer{background:var(--l100);padding:0 clamp(16px,4vw,48px) 28px;overflow:hidden}
 .foot-cr{display:block;height:30px;width:calc(100% + 2 * clamp(16px,4vw,48px));margin:0 calc(-1 * clamp(16px,4vw,48px));color:var(--l600)}
 .foot-in{max-width:1280px;margin:0 auto}
-.foot-mark{font-family:var(--disp);font-weight:600;letter-spacing:-.05em;line-height:.85;font-size:clamp(68px,15vw,232px);color:var(--ink);padding:clamp(40px,6vw,80px) 0 clamp(28px,4vw,48px);font-variation-settings:'opsz' 144}
+.foot-mark{color:var(--ink);--logo-bead:var(--l600);padding:clamp(40px,6vw,80px) 0 clamp(28px,4vw,48px)}
+.foot-mark svg{display:block;width:min(100%,clamp(280px,62vw,880px));height:auto;aspect-ratio:6756/1524}
 .foot-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;padding-bottom:36px}
 .foot-cols > div{display:flex;flex-direction:column;align-items:flex-start;gap:0}
 .foot-cols .btn{margin-bottom:8px}
@@ -382,6 +385,7 @@ body.mbar-on .toast{bottom:92px}
 @media (max-width:900px){
   :root{--nav-h:60px}
   .brand-h{display:none}
+  .brand-logo{height:25px}
   .nav-in{gap:12px}
   .nav-book{margin-left:auto}
   .nav-menu{display:flex}
