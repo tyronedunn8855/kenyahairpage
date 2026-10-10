@@ -458,7 +458,7 @@ var GALLERY = [
     var timer = setTimeout(function () { if (ctl) ctl.abort(); schedDone('backup'); }, 8000);
     var url = SB.url.replace(/\/+$/, '') + '/rest/v1/availability?select=date,start_time,status' +
       '&status=eq.open&date=gte.' + iso(today) + '&order=date.asc,start_time.asc&limit=1000';
-    fetch(url, { headers: { apikey: SB.anonKey, Authorization: 'Bearer ' + SB.anonKey }, signal: ctl ? ctl.signal : undefined, cache: 'no-store' })
+    fetch(url, { headers: { apikey: SB.anonKey }, signal: ctl ? ctl.signal : undefined, cache: 'no-store' })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (list) {
         clearTimeout(timer);
