@@ -1,0 +1,14 @@
+{
+  "name": "ken.didit owner panel",
+  "short_name": "ken.didit",
+  "description": "Kenya's booking requests, hours, prices and photos.",
+  "start_url": "/admin/",
+  "scope": "/admin/",
+  "display": "standalone",
+  "background_color": "#F8F4FD",
+  "theme_color": "#F8F4FD",
+  "icons": [
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

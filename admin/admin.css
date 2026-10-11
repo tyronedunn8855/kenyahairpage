@@ -220,6 +220,42 @@ input[aria-invalid=true],textarea[aria-invalid=true]{border-color:var(--err)}
 .rq-empty h2{font-size:20px}
 .rq-dec{opacity:.75}
 
+/* ─── Stats and alerts ─── */
+.stats,.alerts{margin-bottom:14px}
+.card.stats + .card.alerts{margin-top:0}
+.stats-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.stats-head h2{font-size:19px}
+.stats-head .hint{font-size:13px}
+.stats-n{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.stats-n div{padding:10px 10px 8px;border-radius:12px;background:var(--mist)}
+.stats-n dt{font-size:12.5px;font-weight:600;color:var(--ink2);line-height:1.25}
+.stats-n dd{margin-top:2px;font:600 26px/1.1 var(--disp);color:var(--l800);font-variant-numeric:tabular-nums}
+.bars{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;height:64px;margin-top:12px}
+.bars span{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;min-width:0}
+.bars i{display:block;width:100%;border-radius:6px 6px 3px 3px;background:var(--lilac);transform-origin:bottom;animation:grow .7s var(--ease) both}
+.bars span:last-child i{background:var(--l700)}
+.bars b{font-size:11px;font-weight:700;color:var(--ink2)}
+@keyframes grow{from{transform:scaleY(0)}to{transform:none}}
+.alerts h2{font-size:19px}
+.alerts p{margin-top:6px;color:var(--ink2)}
+.alerts-btns{display:grid;gap:8px;margin-top:4px}
+.alerts-btns .btn,.alerts-btns .btn-ghost{margin-top:8px}
+.alerts-btns:has(> :nth-child(2)){grid-template-columns:1fr auto}
+.rq-dep dd{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.rq-dep dd .link{min-height:36px;font-size:14px;flex:none}
+.rq-dep.paid dd span{color:#1D6B41}
+.rq-acts .row3{margin-top:10px}
+.mv{margin-top:10px}
+.mv .wait{margin-top:10px}
+
+/* ─── Settings and style categories ─── */
+.set-card h2{font-size:20px}
+.row3f{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.row3f label{font-size:13.5px;line-height:1.25;min-height:34px;display:flex;align-items:flex-end}
+.set-form .hint{margin-top:10px}
+.cat-edit{display:block;margin-top:2px;font-size:14.5px}
+.add-cat{margin:0 0 14px}
+
 /* ─── Info ─── */
 .info-sec{margin-bottom:14px}
 .card.info-sec + .card.info-sec{margin-top:0}
@@ -253,7 +289,7 @@ select:focus{outline:none;border-color:var(--l700);box-shadow:0 0 0 4px var(--l1
 .toggle{display:flex;align-items:center;gap:12px;min-height:52px;margin-top:14px;font-weight:600}
 .toggle input{width:26px;height:26px;accent-color:var(--l700);flex:none}
 @media (min-width:700px){.photo-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-.rm .tab-panel,.rm .rq,.rm .tab-n{animation:none}
+.rm .tab-panel,.rm .rq,.rm .tab-n,.rm .bars i{animation:none}
 
 @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes pop{from{opacity:0;transform:translate(-50%,14px) scale(.96)}to{opacity:1;transform:translateX(-50%)}}

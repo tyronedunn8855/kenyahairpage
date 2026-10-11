@@ -169,6 +169,8 @@
       tabLoaded = {};
       startTabs();
       loadMonth();
+      startAlerts();
+      cleanup();
     }).catch(function (e) {
       routed = '';
       $('#load-err-text').textContent = friendly(e).replace(' Nothing was saved.', '');
@@ -473,6 +475,23 @@
   function cleanText(v, max) { return String(v || '').replace(/<[^>]*>/g, '').replace(/[<>"`\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, max); }
   var SERVICES = [['knotless', 'Knotless'], ['fulani', 'Fulani'], ['feedins', 'Feed-ins'], ['quickweave', 'Quick weaves'], ['male', "Men's styles"], ['kids', 'Kids styles']];
   var SVC_NAME = {}; SERVICES.forEach(function (s) { SVC_NAME[s[0]] = s[1]; });
+  // Her style categories and settings live in the database once panel-v3.sql is run. Until then the six above stand in.
+  var cats = null, settings = null, picks = [];
+  function useCats(list) {
+    cats = list; SERVICES = list.map(function (c) { return [c.id, c.name]; });
+    SVC_NAME = {}; SERVICES.forEach(function (x) { SVC_NAME[x[0]] = x[1]; });
+  }
+  function loadCats() {
+    return Promise.all([
+      sb.from('service_categories').select('*').order('sort'),
+      sb.from('site_settings').select('*').eq('id', 1),
+      sb.from('gallery_photos').select('src,caption').order('sort')
+    ]).then(function (r) {
+      if (!r[0].error && (r[0].data || []).length) useCats(r[0].data);
+      if (!r[1].error && (r[1].data || []).length) settings = r[1].data[0];
+      if (!r[2].error) picks = r[2].data || [];
+    }, function () {});
+  }
   var STYLES = ['Knotless', 'Braids', 'Fulani', 'Locs', 'Quick weaves', 'Kids'];
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
@@ -481,7 +500,8 @@
   function loadPrices() {
     $('#prices-err').hidden = true;
     $('#prices').setAttribute('aria-busy', 'true');
-    return sb.from('price_options').select('*').order('service_id').order('sort').then(function (res) {
+    return Promise.all([sb.from('price_options').select('*').order('service_id').order('sort'), loadCats()]).then(function (all) {
+      var res = all[0];
       if (res.error) throw res.error;
       prices = res.data || []; tabLoaded.prices = true;
       $('#prices').removeAttribute('aria-busy');
@@ -494,13 +514,65 @@
   $('#prices-retry').addEventListener('click', loadPrices);
   function optsOf(sid) { return prices.filter(function (o) { return o.service_id === sid; }).sort(function (a, b) { return a.sort - b.sort; }); }
   function priceText(o) { return '$' + o.price + (o.plus ? '+' : ''); }
+  var openCat = null; // category id, or 'new'
+  function catOf(id) { return (cats || []).filter(function (c) { return c.id === id; })[0]; }
+  function moneyInput(id, val) { var w = el('div', 'money'), i = el('input'); i.type = 'text'; i.inputMode = 'numeric'; i.id = id; i.value = val; i.autocomplete = 'off'; w.appendChild(i); return w; }
+  function moneyField(label, id, val) { var w = el('div'), l = el('label', null, label); l.htmlFor = id; w.appendChild(l); w.appendChild(moneyInput(id, val)); return w; }
+  function settingsCard() {
+    var c = el('section', 'card svc set-card');
+    c.appendChild(el('h2', null, 'Deposit and add-ons'));
+    var f = el('form', 'set-form'); f.id = 'set-form'; f.noValidate = true;
+    var g = el('div', 'row3f');
+    g.appendChild(moneyField('Deposit', 'set-dep', settings.deposit));
+    g.appendChild(moneyField('Past butt length', 'set-long', settings.long_price));
+    g.appendChild(moneyField('Design', 'set-design', settings.design_price));
+    f.appendChild(g);
+    f.appendChild(el('p', 'hint', 'Your Stripe link charges a set amount. When you change the deposit here, change the price in your Stripe payment link too.'));
+    var err = el('p', 'field-err'); err.setAttribute('role', 'alert'); err.hidden = true; f.appendChild(err);
+    var sv = el('button', 'btn', 'Save'); sv.type = 'submit'; f.appendChild(sv);
+    c.appendChild(f);
+    return c;
+  }
+  function catForm(c) {
+    var f = el('form', 'opt-form cat-form'); f.noValidate = true; f.dataset.cat = c ? c.id : 'new';
+    f.appendChild(el('h3', null, c ? 'Change ' + c.name : 'New style'));
+    var n = el('input'); n.type = 'text'; n.id = 'cf-name'; n.maxLength = 30; n.value = c ? c.name : ''; n.autocomplete = 'off'; n.placeholder = 'Like Silk press';
+    f.appendChild(field('Name', n));
+    var d = el('textarea'); d.id = 'cf-desc'; d.maxLength = 90; d.rows = 2; d.value = c ? c.description : ''; d.placeholder = 'One line about it';
+    f.appendChild(field('Short description', d));
+    var ps = el('select'); ps.id = 'cf-photo';
+    var srcs = picks.map(function (x) { return [x.src, x.caption || x.src]; });
+    if (c && !srcs.some(function (x) { return x[0] === c.photo; })) srcs.unshift([c.photo, 'Current photo']);
+    srcs.forEach(function (x) { var o = el('option', null, x[1]); o.value = x[0]; if (c && c.photo === x[0]) o.selected = true; ps.appendChild(o); });
+    f.appendChild(field('Photo (from your gallery)', ps));
+    var c1 = el('label', 'check'), lg = el('input'); lg.type = 'checkbox'; lg.id = 'cf-long'; lg.checked = !!(c && c.long);
+    c1.appendChild(lg); c1.appendChild(document.createTextNode('Offer the past butt length add-on')); f.appendChild(c1);
+    var c2 = el('label', 'check'), hd = el('input'); hd.type = 'checkbox'; hd.id = 'cf-hidden'; hd.checked = !!(c && c.hidden);
+    c2.appendChild(hd); c2.appendChild(document.createTextNode('Hide from my site for now')); f.appendChild(c2);
+    if (!c) f.appendChild(el('p', 'hint', 'It shows on your site once it has at least one option with a price.'));
+    var err = el('p', 'field-err'); err.setAttribute('role', 'alert'); err.hidden = true; f.appendChild(err);
+    var row = el('div', 'row'), sv = el('button', 'btn', 'Save'), cn = el('button', 'btn-ghost', 'Cancel');
+    sv.type = 'submit'; cn.type = 'button'; cn.dataset.catcancel = '1'; row.appendChild(sv); row.appendChild(cn); f.appendChild(row);
+    if (c) {
+      var i = cats.indexOf(c), r3 = el('div', 'row2'), up = el('button', null, '\u2191 Earlier'), dn = el('button', null, '\u2193 Later');
+      up.type = dn.type = 'button'; up.dataset.catmove = '-1'; dn.dataset.catmove = '1'; up.disabled = i === 0; dn.disabled = i >= cats.length - 1;
+      r3.appendChild(up); r3.appendChild(dn); f.appendChild(r3);
+    }
+    setTimeout(function () { n.focus(); f.scrollIntoView({ behavior: document.documentElement.classList.contains('rm') ? 'auto' : 'smooth', block: 'center' }); }, 30);
+    return f;
+  }
   function renderPrices() {
     var box = $('#prices'), frag = document.createDocumentFragment();
+    if (settings) frag.appendChild(settingsCard());
     SERVICES.forEach(function (s) {
-      var list = optsOf(s[0]), card = el('section', 'card svc');
+      var list = optsOf(s[0]), card = el('section', 'card svc'), cat = catOf(s[0]);
       var head = el('div', 'svc-head'); head.appendChild(el('h2', null, s[1]));
-      head.appendChild(el('span', 'svc-from', list.length ? 'from $' + Math.min.apply(null, list.map(function (o) { return o.price; })) : 'Not on your site'));
+      head.appendChild(el('span', 'svc-from', cat && cat.hidden ? 'Hidden' : list.length ? 'from $' + Math.min.apply(null, list.map(function (o) { return o.price; })) : 'Not on your site'));
       card.appendChild(head);
+      if (cat) {
+        if (openCat === cat.id) card.appendChild(catForm(cat));
+        else { var ed = el('button', 'link cat-edit', 'Edit name, photo or order'); ed.type = 'button'; ed.dataset.catedit = cat.id; card.appendChild(ed); }
+      }
       var ul = el('ul', 'opts');
       list.forEach(function (o, i) {
         var li = el('li'), b = el('button', 'opt-row');
@@ -516,7 +588,16 @@
       else { var add = el('button', 'btn-ghost add-opt', 'Add an option'); add.type = 'button'; add.dataset.add = s[0]; card.appendChild(add); }
       frag.appendChild(card);
     });
+    if (cats) {
+      if (openCat === 'new') { var nc = el('section', 'card svc'); nc.appendChild(catForm(null)); frag.appendChild(nc); }
+      else { var ac = el('button', 'btn-ghost add-cat', 'Add a style'); ac.type = 'button'; ac.dataset.catedit = 'new'; frag.appendChild(ac); }
+    }
     box.replaceChildren(frag);
+  }
+  function slug(name) {
+    var b = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20) || 'style', id = b, n = 2;
+    while (catOf(id)) id = b + '-' + n++;
+    return id.length < 2 ? id + '-1' : id;
   }
   function field(label, input) { var w = el('div'); var l = el('label', null, label); l.htmlFor = input.id; w.appendChild(l); w.appendChild(input); return w; }
   function optForm(sid, o, idx, count) {
@@ -550,7 +631,21 @@
     return f;
   }
   $('#prices').addEventListener('click', function (e) {
+    var ce = e.target.closest('[data-catedit]'), cc = e.target.closest('[data-catcancel]'), cm = e.target.closest('[data-catmove]');
+    if (ce) { openCat = ce.dataset.catedit; openOpt = null; renderPrices(); return; }
+    if (cc) { openCat = null; renderPrices(); return; }
+    if (cm) {
+      var c = catOf(cm.closest('.cat-form').dataset.cat), list = cats.slice(), i = list.indexOf(c), j = i + Number(cm.dataset.catmove); if (!list[j]) return;
+      list[i] = list[j]; list[j] = c;
+      var ups = list.map(function (x, k) { var o = {}; Object.keys(x).forEach(function (key) { o[key] = x[key]; }); o.sort = (k + 1) * 10; return o; });
+      save('Moving ' + c.name, function () { return sb.from('service_categories').upsert(ups).select(); }, 'Saved. ' + c.name + ' moved on your site.').then(function (d) {
+        d.forEach(function (x) { var k = cats.map(function (y) { return y.id; }).indexOf(x.id); if (k > -1) cats[k] = x; });
+        cats.sort(function (a, b) { return a.sort - b.sort; }); useCats(cats); renderPrices();
+      }, function () {});
+      return;
+    }
     var row = e.target.closest('.opt-row'), add = e.target.closest('[data-add]'), f = e.target.closest('.opt-form');
+    if (f && f.classList.contains('cat-form')) return;
     if (row) { openOpt = openOpt === row.dataset.id ? null : row.dataset.id; renderPrices(); return; }
     if (add) { openOpt = 'new:' + add.dataset.add; renderPrices(); return; }
     if (!f) return;
@@ -575,6 +670,34 @@
   });
   $('#prices').addEventListener('submit', function (e) {
     e.preventDefault();
+    var tf = e.target;
+    if (tf.id === 'set-form') {
+      var vals = [['#set-dep', 'deposit', 500], ['#set-long', 'long_price', 200], ['#set-design', 'design_price', 200]], upd = {}, bad = null;
+      vals.forEach(function (v) { var inp = tf.querySelector(v[0]), raw = inp.value.replace(/[$,\s]/g, ''); if (!/^\d{1,3}$/.test(raw) || +raw > v[2]) { if (!bad) bad = [inp, 'Type whole dollars, like 15.']; } else upd[v[1]] = +raw; });
+      var er = tf.querySelector('.field-err');
+      if (bad) { er.textContent = bad[1]; er.hidden = false; bad[0].setAttribute('aria-invalid', 'true'); bad[0].focus(); return; }
+      upd.updated_at = new Date().toISOString();
+      save('Saving', function () { return sb.from('site_settings').update(upd).eq('id', 1).select(); }, 'Saved. Deposit $' + upd.deposit + ', past butt length +$' + upd.long_price + ', design +$' + upd.design_price + '.')
+        .then(function (d) { settings = d[0]; renderPrices(); }, function () {});
+      return;
+    }
+    if (tf.classList.contains('cat-form')) {
+      var isNew = tf.dataset.cat === 'new', cur = catOf(tf.dataset.cat), ce2 = tf.querySelector('.field-err');
+      var name = cleanText(tf.querySelector('#cf-name').value, 30), desc = cleanText(tf.querySelector('#cf-desc').value, 90);
+      if (!name) { ce2.textContent = 'Give this style a name.'; ce2.hidden = false; tf.querySelector('#cf-name').focus(); return; }
+      var photo = tf.querySelector('#cf-photo').value;
+      if (!photo) { ce2.textContent = 'Add a photo in your Photos tab first, then pick it here.'; ce2.hidden = false; return; }
+      var row = { name: name, description: desc, photo: photo, long: tf.querySelector('#cf-long').checked, hidden: tf.querySelector('#cf-hidden').checked, updated_at: new Date().toISOString() };
+      if (isNew) {
+        row.id = slug(name); row.sort = cats.length ? cats[cats.length - 1].sort + 10 : 10;
+        save('Adding ' + name, function () { return sb.from('service_categories').insert(row).select(); }, 'Saved. Now add an option with a price so ' + name + ' shows on your site.')
+          .then(function (d) { cats.push(d[0]); useCats(cats); openCat = null; openOpt = 'new:' + d[0].id; renderPrices(); }, function () {});
+      } else {
+        save('Saving ' + name, function () { return sb.from('service_categories').update(row).eq('id', cur.id).select(); }, row.hidden ? 'Saved. ' + name + ' is hidden from your site.' : 'Saved. ' + name + ' is on your site.')
+          .then(function (d) { cats[cats.indexOf(cur)] = d[0]; useCats(cats); openCat = null; renderPrices(); }, function () {});
+      }
+      return;
+    }
     var f = e.target, sid = f.dataset.sid, id = f.dataset.id, err = f.querySelector('.field-err');
     var name = cleanText(f.querySelector('#of-name').value, 40), dur = cleanText(f.querySelector('#of-dur').value, 30);
     var raw = f.querySelector('#of-price').value.replace(/[$,\s]/g, ''), price = /^\d{1,4}$/.test(raw) ? +raw : NaN;
@@ -606,7 +729,7 @@
   /* ═══ Requests ═══
      Clients send a request from the booking page (submit_booking_request in requests-faq.sql).
      Confirm marks the request confirmed and the matching open time booked, so nobody else can pick it. */
-  var reqs = [], reqFilter = 'new', reqSeq = 0, openReq = null;
+  var reqs = [], reqFilter = 'new', reqSeq = 0, openReq = null, moved = {}, openSlots = null;
   var IOS = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent);
   function loadRequests() {
     var seq = ++reqSeq;
@@ -617,6 +740,7 @@
       reqs = res.data || []; tabLoaded.requests = true;
       $('#reqs').removeAttribute('aria-busy');
       renderRequests();
+      loadStats();
     }).catch(function (e) {
       if (seq !== reqSeq) return;
       $('#req-err-text').textContent = 'Couldn\'t load your requests. ' + friendly(e).replace(' Nothing was saved.', '');
@@ -625,6 +749,102 @@
     });
   }
   $('#req-retry').addEventListener('click', loadRequests);
+  // Client details don't pile up: requests for appointments more than 90 days back are deleted
+  var cleaned = false;
+  function cleanup() {
+    if (cleaned) return; cleaned = true;
+    sb.from('booking_requests').delete().lt('appt_date', iso(addDays(today, -90))).then(function () {}, function () {});
+  }
+
+  /* ─── Last 7 days: visits, booking opens and requests (counts only, nothing about the visitor) ─── */
+  function loadStats() {
+    var from = iso(addDays(today, -6));
+    sb.from('visit_stats').select('day,kind,n').gte('day', from).then(function (res) {
+      if (res.error) { $('#stats').hidden = true; return; }
+      var tot = { visit: 0, booking: 0, request: 0 }, per = {};
+      (res.data || []).forEach(function (x) { tot[x.kind] = (tot[x.kind] || 0) + x.n; if (x.kind === 'visit') per[x.day] = x.n; });
+      $('#st-visit').textContent = tot.visit; $('#st-booking').textContent = tot.booking; $('#st-request').textContent = tot.request;
+      var days = [], max = 1;
+      for (var i = 6; i >= 0; i--) { var d = addDays(today, -i), k = iso(d); days.push([d, per[k] || 0]); max = Math.max(max, per[k] || 0); }
+      var bars = $('#st-bars'); bars.replaceChildren();
+      days.forEach(function (x) { var b = el('span'), f = el('i'); f.style.height = Math.max(4, Math.round(x[1] / max * 100)) + '%'; b.appendChild(f); b.appendChild(el('b', null, DAYS[x[0].getDay()].charAt(0))); bars.appendChild(b); });
+      $('#stats-sub').textContent = tot.visit ? 'Counts only. Nothing about who visited.' : 'Counting started. Visits show here as people come by.';
+      $('#stats').hidden = false;
+    }, function () { $('#stats').hidden = true; });
+  }
+
+  /* ─── Request alerts on her phone (Web Push). On iPhone this works once the panel is on her Home Screen. ─── */
+  var VAPID = cfg.vapidKey || '';
+  var IPHONE = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  var STANDALONE = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  var CAN_PUSH = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  var swReg = null, pushSub = null;
+  function keyBytes(k) { var s = atob(k.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((k.length + 3) % 4)); var a = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; }
+  function alertsBtn(label, act, cls) { var b = el('button', cls || 'btn-ghost', label); b.type = 'button'; b.dataset.alert = act; $('#alerts-btns').appendChild(b); return b; }
+  function renderAlerts() {
+    var box = $('#alerts'), txt = $('#alerts-text'); $('#alerts-btns').replaceChildren();
+    if (!VAPID) { box.hidden = true; return; }
+    if (!CAN_PUSH) {
+      if (IPHONE && !STANDALONE) { txt.textContent = 'Get a ping on your iPhone when a new request comes in. First put this panel on your Home Screen: tap the Share button, then Add to Home Screen. Open the panel from that icon and turn alerts on here.'; box.hidden = false; }
+      else box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    if (Notification.permission === 'denied') { txt.textContent = 'Alerts are blocked for this panel. Turn them on in your phone\'s Settings, under Notifications.'; return; }
+    if (pushSub && Notification.permission === 'granted') {
+      txt.textContent = 'Alerts are on for this phone. You get a ping when a new request comes in.';
+      alertsBtn('Send a test alert', 'test'); alertsBtn('Turn off', 'off', 'btn-ghost quiet');
+    } else {
+      txt.textContent = 'Get a ping on this phone when a new request comes in.';
+      alertsBtn('Turn on alerts', 'on', 'btn');
+    }
+  }
+  function startAlerts() {
+    if (!VAPID || !CAN_PUSH) { renderAlerts(); return; }
+    navigator.serviceWorker.register('/admin/sw.js', { scope: '/admin/' }).then(function (reg) {
+      swReg = reg; return reg.pushManager.getSubscription();
+    }).then(function (sub) { pushSub = sub; renderAlerts(); }, function () { $('#alerts').hidden = true; });
+  }
+  $('#alerts-btns').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-alert]'); if (!b || busy) return;
+    var act = b.dataset.alert;
+    if (act === 'on') {
+      status('saving', 'Turning on alerts');
+      Notification.requestPermission().then(function (perm) {
+        if (perm !== 'granted') throw { msg: 'Alerts stay off. Your phone asked and the answer was no.' };
+        return (swReg || navigator.serviceWorker.ready).pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(VAPID) });
+      }).then(function (sub) {
+        pushSub = sub; var j = sub.toJSON();
+        return sb.from('push_subscriptions').insert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth }).select();
+      }).then(function (res) {
+        if (res.error && res.error.code !== '23505') throw res.error;
+        status('saved', 'Alerts are on. Send a test alert to check.'); renderAlerts();
+      }).catch(function (err) {
+        // Browser-side failures (no push support, blocked) are DOMExceptions, not database errors
+        var browser = err && typeof err.name === 'string' && !err.code && /Error$|NotAllowed|Abort|NotSupported|InvalidState/.test(err.name);
+        status('error', err && err.msg ? err.msg : browser ? 'This browser couldn\'t turn on alerts. On iPhone, open the panel from its Home Screen icon and try again.' : friendly(err));
+        renderAlerts();
+      });
+    } else if (act === 'test') {
+      status('saving', 'Sending a test alert');
+      sb.auth.getSession().then(function (r) {
+        var tok = r.data.session && r.data.session.access_token;
+        return fetch('/api/notify', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ test: true }) });
+      }).then(function (r) {
+        if (r.status === 503) throw { msg: 'Alerts are not finished on the server yet. Ty needs to add the alert keys.' };
+        if (!r.ok) throw { msg: 'The test alert didn\'t send. Try again in a minute.' };
+        return r.json();
+      }).then(function (j) { status('saved', j.sent ? 'Test sent. It should show up on your phone in a few seconds.' : 'No phone took the alert. Turn alerts off, then on again.'); })
+        .catch(function (err) { status('error', err && err.msg ? err.msg : friendly(err)); });
+    } else if (act === 'off') {
+      var ep = pushSub && pushSub.endpoint;
+      status('saving', 'Turning off alerts');
+      (pushSub ? pushSub.unsubscribe() : Promise.resolve()).then(function () {
+        return ep ? sb.from('push_subscriptions').delete().eq('endpoint', ep).select() : { data: [] };
+      }).then(function () { pushSub = null; status('saved', 'Alerts are off for this phone.'); renderAlerts(); })
+        .catch(function (err) { status('error', friendly(err)); });
+    }
+  });
   $('#req-refresh').addEventListener('click', function () {
     var b = this; b.disabled = true; b.textContent = 'Checking';
     loadRequests().finally(function () { b.disabled = false; b.textContent = 'Check for new requests'; });
@@ -647,9 +867,14 @@
     var d = parse(r.appt_date);
     return 'Hi ' + firstName(r) + ', this is Kenya with ken.didit. You are confirmed for ' + r.style + ' on ' + DAYS[d.getDay()] + ', ' + MONTHS[d.getMonth()] + ' ' + d.getDate() + ' at ' + fmtTime(r.appt_time) + '. I will send the address the day before.';
   }
+  function movedText(r) {
+    var d = parse(r.appt_date);
+    return 'Hi ' + firstName(r) + ', this is Kenya with ken.didit. Your appointment moved to ' + DAYS[d.getDay()] + ', ' + MONTHS[d.getMonth()] + ' ' + d.getDate() + ' at ' + fmtTime(r.appt_time) + '. I will send the address the day before.';
+  }
   function icsHref(r) {
     var q = new URLSearchParams({ id: r.id, date: r.appt_date, time: hm(r.appt_time), dur: r.duration_min, name: r.name, style: r.style, addons: r.addons || '',
-      total: r.total, plus: r.total_plus ? '1' : '0', phone: r.phone, paid: r.paid_said ? '1' : '0', notes: r.notes || '' });
+      total: r.total, plus: r.total_plus ? '1' : '0', phone: r.phone, paid: r.deposit_paid ? '2' : r.paid_said ? '1' : '0', notes: r.notes || '',
+      seq: Math.floor(new Date(r.updated_at || r.created_at).getTime() / 1000) });
     return '/api/ics?' + q.toString();
   }
   var PILL = { new: 'New', confirmed: 'Confirmed', done: 'Done', declined: 'Declined' };
@@ -676,14 +901,22 @@
     var c = el('article', 'card rq rq-' + r.status); c.dataset.id = r.id;
     var top = el('div', 'rq-top');
     top.appendChild(el('span', 'pill pill-' + r.status, isPast(r) && r.status === 'new' ? 'Missed' : PILL[r.status]));
-    top.appendChild(el('span', 'rq-ago', 'Sent ' + ago(r.created_at) + ' by ' + (r.sent_by === 'instagram' ? 'Instagram' : 'text')));
+    top.appendChild(el('span', 'rq-ago', 'Sent ' + ago(r.created_at) + (r.sent_by === 'instagram' ? ' by Instagram' : r.sent_by === 'deposit' ? ' with the deposit' : ' by text')));
     c.appendChild(top);
     c.appendChild(el('h3', 'rq-name', r.name));
     c.appendChild(el('p', 'rq-when', when(r)));
     var dl = el('dl', 'rq-dl');
     function row(k, v) { if (!v) return; var d = el('div'); d.appendChild(el('dt', null, k)); d.appendChild(el('dd', null, v)); dl.appendChild(d); }
     row('Style', r.style); row('Add-ons', r.addons); row('Takes about', durText(r.duration_min));
-    row('Total', '$' + r.total + (r.total_plus ? '+' : '')); row('Deposit', r.paid_said ? 'Client says paid. Check Stripe.' : 'Not paid yet');
+    row('Total', '$' + r.total + (r.total_plus ? '+' : ''));
+    // Deposit: Stripe's word beats the client's. She marks cash or Cash App deposits herself.
+    var dep = el('div', 'rq-dep' + (r.deposit_paid ? ' paid' : '')), dd = el('dd');
+    dd.appendChild(el('span', null, r.deposit_paid ? (r.stripe_session ? 'Paid' + (r.deposit_cents ? ' $' + (r.deposit_cents / 100) : '') + ', confirmed by Stripe' : 'Marked paid by you')
+      : r.paid_said ? 'Client says paid. Stripe has not confirmed it yet.' : 'Not paid yet'));
+    if (!isPast(r) && (r.status === 'new' || r.status === 'confirmed') && !r.stripe_session) {
+      var mk = el('button', 'link', r.deposit_paid ? 'Undo' : 'Mark paid'); mk.type = 'button'; mk.dataset.act = r.deposit_paid ? 'unpaid' : 'paid'; dd.appendChild(mk);
+    }
+    dep.appendChild(el('dt', null, 'Deposit')); dep.appendChild(dd); dl.appendChild(dep);
     row('Phone', phonePretty(r.phone)); row('Notes', r.notes);
     c.appendChild(dl);
     var acts = el('div', 'rq-acts');
@@ -696,9 +929,11 @@
     } else if (r.status === 'confirmed' && !isPast(r)) {
       var cal = link('Add to Apple Calendar', 'btn cal', icsHref(r));
       cal.insertAdjacentHTML('afterbegin', '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>');
-      link('Text ' + firstName(r) + ' the confirmation', 'btn-ghost', smsHref(r, confirmText(r)));
-      var r2 = el('div', 'row2'); acts.appendChild(r2);
-      [['Mark done', 'done'], ['Cancel booking', 'cancel']].forEach(function (x) { var b = el('button', x[1] === 'cancel' ? 'rm-btn' : null, x[0]); b.type = 'button'; b.dataset.act = x[1]; r2.appendChild(b); });
+      if (moved[r.id]) link('Text ' + firstName(r) + ' the new time', 'btn-ghost', smsHref(r, movedText(r)));
+      else link('Text ' + firstName(r) + ' the confirmation', 'btn-ghost', smsHref(r, confirmText(r)));
+      if (openReq === r.id) acts.appendChild(moveForm(r));
+      var r2 = el('div', 'row3'); acts.appendChild(r2);
+      [['Move time', 'move'], ['Mark done', 'done'], ['Cancel', 'cancel']].forEach(function (x) { var b = el('button', x[1] === 'cancel' ? 'rm-btn' : null, x[0]); b.type = 'button'; b.dataset.act = x[1]; if (x[1] === 'move') b.setAttribute('aria-expanded', openReq === r.id ? 'true' : 'false'); r2.appendChild(b); });
     } else {
       var r3 = el('div', 'row2'); acts.appendChild(r3);
       if (r.status !== 'done' && !isPast(r)) { var b1 = el('button', null, 'Move back to new'); b1.type = 'button'; b1.dataset.act = 'reopen'; r3.appendChild(b1); }
@@ -715,11 +950,59 @@
   function slot(r, from, to) { // the matching time on her calendar
     return sb.from('availability').update({ status: to }).eq('date', r.appt_date).eq('start_time', r.appt_time).eq('status', from).select();
   }
+  /* Move a confirmed booking: pick another open time. The old time opens again, the new one is booked. */
+  function moveForm(r) {
+    var f = el('form', 'opt-form mv'); f.noValidate = true; f.dataset.id = r.id;
+    f.appendChild(el('h3', null, 'Move to another time'));
+    if (!openSlots) { var w = el('p', 'wait'); w.appendChild(el('span', 'spin')); w.appendChild(document.createTextNode('Loading your open times')); f.appendChild(w); return f; }
+    var days = {}; openSlots.forEach(function (s) { (days[s.date] = days[s.date] || []).push(s); });
+    var keys = Object.keys(days).sort();
+    if (!keys.length) { f.appendChild(el('p', 'hint', 'You have no open times coming up. Open a time on your Hours tab first.')); return f; }
+    var ds = el('select'); ds.id = 'mv-day';
+    keys.forEach(function (k) { var o = el('option', null, fmtDay(parse(k)) + ' (' + days[k].length + ' open)'); o.value = k; ds.appendChild(o); });
+    var ts = el('select'); ts.id = 'mv-time';
+    function fill() { ts.replaceChildren(); days[ds.value].forEach(function (s) { var o = el('option', null, fmtTime(s.start_time)); o.value = s.start_time; ts.appendChild(o); }); }
+    ds.addEventListener('change', fill); fill();
+    f.appendChild(field('Day', ds)); f.appendChild(field('Time', ts));
+    var row = el('div', 'row'), sv = el('button', 'btn', 'Move it'), cn = el('button', 'btn-ghost', 'Cancel');
+    sv.type = 'submit'; cn.type = 'button'; cn.dataset.act = 'move'; row.appendChild(sv); row.appendChild(cn); f.appendChild(row);
+    return f;
+  }
+  $('#reqs').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target, r = reqs.filter(function (x) { return x.id === f.dataset.id; })[0]; if (!r) return;
+    var nd = f.querySelector('#mv-day').value, nt = f.querySelector('#mv-time').value, old = { appt_date: r.appt_date, appt_time: r.appt_time };
+    if (nd === r.appt_date && hm(nt) === hm(r.appt_time)) { openReq = null; renderRequests(); return; }
+    var label = fmtDay(parse(nd)) + ' at ' + fmtTime(nt);
+    save('Moving to ' + label, function () {
+      return sb.from('booking_requests').update({ appt_date: nd, appt_time: nt, updated_at: new Date().toISOString() }).eq('id', r.id).select().then(function (res) {
+        if (res.error || !(res.data || []).length) return res;
+        return slot(old, 'booked', 'open').then(function () { return slot({ appt_date: nd, appt_time: nt }, 'open', 'booked'); }).then(function () { return res; });
+      });
+    }, 'Moved to ' + label + '. Text ' + firstName(r) + ' the new time and add it to your calendar again.').then(function (rows) {
+      mergeReq(rows); moved[r.id] = true; openReq = null; openSlots = null; renderRequests(); markHoursStale();
+    }, function () {});
+  });
   function mergeReq(rows) { rows.forEach(function (x) { for (var i = 0; i < reqs.length; i++) if (reqs[i].id === x.id) reqs[i] = x; }); }
   $('#reqs').addEventListener('click', function (e) {
     var b = e.target.closest('button[data-act]'); if (!b) return;
     var card = b.closest('.rq'), r = reqs.filter(function (x) { return x.id === card.dataset.id; })[0]; if (!r) return;
     var act = b.dataset.act, slotNote = '';
+    if (act === 'move') {
+      openReq = openReq === r.id ? null : r.id; renderRequests();
+      if (openReq && !openSlots) {
+        sb.from('availability').select('date,start_time').eq('status', 'open').gte('date', TODAY).lte('date', iso(addDays(today, 90))).order('date').order('start_time').then(function (res) {
+          openSlots = res.error ? [] : (res.data || []); renderRequests();
+        });
+      }
+      return;
+    }
+    if (act === 'paid' || act === 'unpaid') {
+      save(act === 'paid' ? 'Marking the deposit paid' : 'Undoing', function () {
+        return sb.from('booking_requests').update({ deposit_paid: act === 'paid', deposit_paid_at: act === 'paid' ? new Date().toISOString() : null, updated_at: new Date().toISOString() }).eq('id', r.id).select();
+      }, act === 'paid' ? 'Deposit marked paid.' : 'Deposit marked not paid.').then(function (rows) { mergeReq(rows); renderRequests(); }, function () {});
+      return;
+    }
     if (act === 'confirm') {
       save('Confirming ' + r.name, function () {
         return setStatus(r, 'confirmed').then(function (res) {
@@ -765,15 +1048,25 @@
       head: function (x) { return x.big + ' · ' + x.title; }, sub: function (x) { return x.body; } },
     faq: { table: 'faq_items', box: '#faq-list', noun: 'question', items: [], open: null,
       fields: [{ k: 'q', label: 'Question', max: 120 }, { k: 'a', label: 'Answer', max: 500, area: true }],
-      head: function (x) { return x.q; }, sub: function (x) { return x.a; } }
+      head: function (x) { return x.q; }, sub: function (x) { return x.a; } },
+    rev: { table: 'reviews', box: '#rev-list', noun: 'review', items: [], open: null, noStamp: true, optional: true,
+      fields: [{ k: 'name', label: 'Client name', max: 40, ph: 'First name or initials' }, { k: 'body', label: 'What they said', max: 400, area: true },
+        { k: 'stars', label: 'Stars', select: [['', 'No stars'], ['5', '5 stars'], ['4', '4 stars'], ['3', '3 stars'], ['2', '2 stars'], ['1', '1 star']], num: true },
+        { k: 'service', label: 'Style they got', max: 40, ph: 'Like Knotless, small', opt: true },
+        { k: 'source', label: 'Where they said it', select: [['', 'Leave blank'], ['Text', 'Text'], ['Instagram', 'Instagram'], ['Facebook', 'Facebook'], ['Google', 'Google'], ['In person', 'In person']] }],
+      head: function (x) { return x.name + (x.stars ? ' · ' + x.stars + ' stars' : ''); }, sub: function (x) { return x.body; } }
   };
   function loadInfo() {
     $('#info-err').hidden = true;
-    return Promise.all([INFO.pol, INFO.faq].map(function (L) {
-      return sb.from(L.table).select('*').order('sort').then(function (res) { if (res.error) throw res.error; L.items = res.data || []; });
+    return Promise.all([INFO.pol, INFO.faq, INFO.rev].map(function (L) {
+      return sb.from(L.table).select('*').order('sort').then(function (res) {
+        if (res.error) { if (L.optional) { L.missing = true; return; } throw res.error; }
+        L.items = res.data || [];
+      });
     })).then(function () {
       tabLoaded.info = true;
-      ['pol', 'faq'].forEach(function (k) { $(INFO[k].box).removeAttribute('aria-busy'); renderInfo(k); });
+      $('#rev-sec').hidden = !!INFO.rev.missing;
+      ['pol', 'faq', 'rev'].forEach(function (k) { if (INFO[k].missing) return; $(INFO[k].box).removeAttribute('aria-busy'); renderInfo(k); });
     }).catch(function (e) {
       $('#info-err-text').textContent = 'Couldn\'t load your policies and FAQ. ' + friendly(e).replace(' Nothing was saved.', '');
       $('#info-err').hidden = false;
@@ -801,9 +1094,15 @@
     f.appendChild(el('h3', null, x ? 'Change this ' + L.noun : 'New ' + L.noun));
     var first = null;
     L.fields.forEach(function (fd) {
-      var inp = el(fd.area ? 'textarea' : 'input'); if (!fd.area) inp.type = 'text'; else inp.rows = 4;
-      inp.id = 'if-' + k + '-' + fd.k; inp.maxLength = fd.max; inp.value = x ? x[fd.k] : ''; inp.autocomplete = 'off'; if (fd.ph) inp.placeholder = fd.ph;
-      inp.dataset.k = fd.k; f.appendChild(field(fd.label, inp)); if (!first) first = inp;
+      var inp;
+      if (fd.select) {
+        inp = el('select');
+        fd.select.forEach(function (o) { var op = el('option', null, o[1]); op.value = o[0]; if (x && String(x[fd.k] == null ? '' : x[fd.k]) === o[0]) op.selected = true; inp.appendChild(op); });
+      } else {
+        inp = el(fd.area ? 'textarea' : 'input'); if (!fd.area) inp.type = 'text'; else inp.rows = 4;
+        inp.maxLength = fd.max; inp.value = x ? (x[fd.k] || '') : ''; inp.autocomplete = 'off'; if (fd.ph) inp.placeholder = fd.ph;
+      }
+      inp.id = 'if-' + k + '-' + fd.k; inp.dataset.k = fd.k; f.appendChild(field(fd.label + (fd.opt ? ' (optional)' : ''), inp)); if (!first) first = inp;
     });
     var c = el('label', 'check'), hid = el('input'); hid.type = 'checkbox'; hid.id = 'if-' + k + '-hidden'; hid.checked = !!(x && x.hidden);
     c.appendChild(hid); c.appendChild(document.createTextNode('Hide from my site for now')); f.appendChild(c);
@@ -826,7 +1125,7 @@
     L.items.sort(function (a, b) { return a.sort - b.sort; });
     L.open = null; renderInfo(k);
   }
-  ['pol', 'faq'].forEach(function (k) {
+  ['pol', 'faq', 'rev'].forEach(function (k) {
     var L = INFO[k], box = $(L.box);
     box.addEventListener('click', function (e) {
       var row = e.target.closest('.opt-row'), add = e.target.closest('[data-add]'), f = e.target.closest('.opt-form');
@@ -855,11 +1154,13 @@
       e.preventDefault();
       var f = e.target, id = f.dataset.id, err = f.querySelector('.field-err'), row = {}, bad = null;
       L.fields.forEach(function (fd) {
-        var inp = f.querySelector('[data-k="' + fd.k + '"]'), v = cleanText(inp.value, fd.max); row[fd.k] = v;
-        if (!v && !bad) bad = [inp, fd.label + ' can\'t be empty.'];
+        var inp = f.querySelector('[data-k="' + fd.k + '"]');
+        if (fd.select) { row[fd.k] = fd.num ? (inp.value ? +inp.value : null) : inp.value; return; }
+        var v = cleanText(inp.value, fd.max); row[fd.k] = v;
+        if (!v && !fd.opt && !bad) bad = [inp, fd.label + ' can\'t be empty.'];
       });
       if (bad) { err.textContent = bad[1]; err.hidden = false; bad[0].setAttribute('aria-invalid', 'true'); bad[0].focus(); return; }
-      row.hidden = f.querySelector('#if-' + k + '-hidden').checked; row.updated_at = new Date().toISOString();
+      row.hidden = f.querySelector('#if-' + k + '-hidden').checked; if (!L.noStamp) row.updated_at = new Date().toISOString();
       if (id) {
         save('Saving', function () { return sb.from(L.table).update(row).eq('id', id).select(); }, row.hidden ? 'Saved. Hidden from your site.' : 'Saved. It shows on your site.').then(function (d) { mergeInfo(k, d); }, function () {});
       } else {
@@ -880,7 +1181,7 @@
   function large(p) { var m = p.src.match(/^builtin:(.+)$/); return m ? '/img/w/' + m[1] + '-800.webp' : STORE + p.src + '/1600'; }
   function loadPhotos() {
     $('#photos-err').hidden = true;
-    return sb.from('gallery_photos').select('*').order('sort').then(function (res) {
+    return (cats ? Promise.resolve() : loadCats()).then(function () { return sb.from('gallery_photos').select('*').order('sort'); }).then(function (res) {
       if (res.error) throw res.error;
       photos = res.data || []; tabLoaded.photos = true;
       $('#photo-grid').removeAttribute('aria-busy');

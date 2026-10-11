@@ -11,6 +11,8 @@ var CONFIG = {
   //   https://YOUR-SITE.vercel.app/?deposit=paid#book
   depositLink: 'https://buy.stripe.com/fZucN4bB49VfdFEcTd8Vi00',
   deposit: 15,
+  longPrice: 15,   // past butt length add-on. Kenya changes these three in her panel (Prices tab).
+  designPrice: 10, // design add-on
 
   // LIVE SCHEDULE: Kenya sets her hours in the owner panel (/admin/), saved in
   // Supabase. The URL and public key live in supabase-config.js.
@@ -94,6 +96,10 @@ var GALLERY = [
      framing as the originals) with the full JPG as the fallback. */
   function srcset(f) { var ws = f === 'owner' ? [400, 800, 1174] : [400, 800, 1200]; return ws.map(function (w) { return 'img/w/' + f + '-' + w + '.webp ' + w + 'w'; }).join(', '); }
   function base(src) { return src.replace(/^img\//, '').replace(/\.jpg$/, ''); }
+  function catPic(s, sizes, attrs) { // a style's photo: one of the site's own files, or one Kenya uploaded
+    if (s.up) return '<img src="' + s.up + '/800" srcset="' + s.up + '/800 800w, ' + s.up + '/1600 1600w" sizes="' + sizes + '" ' + attrs + '>';
+    return pic(base(s.img), sizes, attrs);
+  }
   function pic(f, sizes, attrs) {
     return '<picture><source type="image/webp" srcset="' + srcset(f) + '" sizes="' + sizes + '"><img src="img/' + f + '.jpg" width="1809" height="2412" ' + attrs + '></picture>';
   }
@@ -155,23 +161,45 @@ var GALLERY = [
   var BUILT_GALLERY = GALLERY.slice();
   var TAG_SET = ['Knotless', 'Braids', 'Fulani', 'Locs', 'Quick weaves', 'Kids'];
   function clean(v, max) { return String(v == null ? '' : v).replace(/<[^>]*>/g, '').replace(/[<>"`\\]/g, '').replace(/&/g, 'and').replace(/\s+/g, ' ').trim().slice(0, max); }
+  function applySettings(st) {
+    if (!st) return;
+    [['deposit', 'deposit', 500], ['long_price', 'longPrice', 200], ['design_price', 'designPrice', 200]].forEach(function (k) {
+      var v = Math.round(+st[k[0]]); if (v >= 0 && v <= k[2]) CONFIG[k[1]] = v;
+    });
+    $$('.js-dep').forEach(function (e) { e.textContent = money(CONFIG.deposit); });
+    $$('.js-long').forEach(function (e) { e.textContent = '+' + money(CONFIG.longPrice); });
+  }
   function applyLive(data) {
     if (!data || !Array.isArray(data.prices) || !Array.isArray(data.photos) || !LIVE.url) return false;
+    var storage0 = LIVE.url.replace(/\/+$/, '') + '/storage/v1/object/public/gallery/';
+    // Style categories from her panel. Without them, the six built-in ones stand.
+    var cats = null;
+    if (Array.isArray(data.cats) && data.cats.length) {
+      cats = {};
+      data.cats.filter(function (c) { return c && !c.hidden && /^[a-z0-9-]{2,24}$/.test(c.id); }).sort(function (x, y) { return (+x.sort || 0) - (+y.sort || 0); }).forEach(function (c) {
+        var m = String(c.photo).match(/^builtin:([a-z0-9-]+)$/), up = /^uploads\/[a-f0-9-]+$/.test(c.photo);
+        var b = BUILT[c.id] || {};
+        cats[c.id] = { id: c.id, name: clean(c.name, 30) || b.name, desc: clean(c.description, 90), long: !!c.long, pos: b.pos,
+          img: m && BUILT_PICS.indexOf(m[1]) > -1 ? 'img/' + m[1] + '.jpg' : (b.img || 'img/knotless-1.jpg'), up: up ? storage0 + c.photo : null };
+      });
+    }
+    var ids = cats ? Object.keys(cats) : SVC_IDS;
+    applySettings(data.settings);
     var by = {};
     data.prices.forEach(function (o) {
-      if (!o || SVC_IDS.indexOf(o.service_id) < 0) return;
+      if (!o || ids.indexOf(o.service_id) < 0) return;
       var n = clean(o.name, 40), d = clean(o.duration, 30), pr = Math.round(+o.price);
       if (!n || !d || !(pr >= 0 && pr <= 2000)) return;
       (by[o.service_id] = by[o.service_id] || []).push({ n: n, p: pr, d: d, plus: !!o.plus, design: !!o.design, dd: clean(o.design_duration, 30), so: +o.sort || 0 });
     });
-    var svcs = SVC_IDS.filter(function (id) { return by[id] && by[id].length; }).map(function (id) {
-      var b = BUILT[id];
+    var svcs = ids.filter(function (id) { return by[id] && by[id].length; }).map(function (id) {
+      var b = cats ? cats[id] : BUILT[id];
       var opts = by[id].sort(function (x, y) { return x.so - y.so; }).map(function (o) { delete o.so; return o; });
-      return { id: id, img: b.img, pos: b.pos, name: b.name, desc: b.desc, long: b.long, options: opts };
+      return { id: id, img: b.img, up: b.up || null, pos: b.pos, name: b.name, desc: b.desc, long: b.long, options: opts };
     });
     if (!svcs.length) return false; // never empty the menu
     var storage = LIVE.url.replace(/\/+$/, '') + '/storage/v1/object/public/gallery/';
-    var pics = data.photos.filter(function (g) { return g && !g.hidden && TAG_SET.indexOf(g.tag) > -1 && SVC_IDS.indexOf(g.book) > -1; })
+    var pics = data.photos.filter(function (g) { return g && !g.hidden && TAG_SET.indexOf(g.tag) > -1 && svcs.some(function (x) { return x.id === g.book; }); })
       .sort(function (x, y) { return (+x.sort || 0) - (+y.sort || 0); })
       .map(function (g) {
         var src = String(g.src), m = src.match(/^builtin:([a-z0-9-]+)$/), up = /^uploads\/[a-f0-9-]+$/.test(src);
@@ -221,7 +249,7 @@ var GALLERY = [
     }).join('');
     var card = document.createElement('article');
     card.className = 'pcat'; card.id = 'p-' + s.id; card.dataset.i = si;
-    card.innerHTML = '<div class="pcat-img">' + pic(base(s.img), '280px', 'alt="' + s.name + ' by ken.didit" loading="lazy" decoding="async"') + '</div>' +
+    card.innerHTML = '<div class="pcat-img">' + catPic(s, '280px', 'alt="' + s.name + ' by ken.didit" loading="lazy" decoding="async"') + '</div>' +
       '<div class="pcat-top"><span class="mono pcat-n">' + String(si + 1).padStart(2, '0') + '</span><h3>' + s.name + '</h3><span class="from">from ' + money(low(s)) + '</span></div>' +
       '<p class="desc">' + s.desc + '</p>' + rows +
       '<div class="pbook"><button class="tlink" data-cat="' + s.id + '">Book ' + s.name.toLowerCase() + '</button></div>';
@@ -244,7 +272,7 @@ var GALLERY = [
   /* sticky photo beside the rate card follows the category in view (desktop only) */
   var frame = $('#rp-frame'), rpCap = $('#rp-cap');
   function renderFrame() {
-    frame.innerHTML = SERVICES.map(function (s, i) { return pic(base(s.img), '(max-width:900px) 10px, 34vw', 'alt="" loading="lazy" decoding="async"' + (i ? '' : ' class="on"')); }).join('');
+    frame.innerHTML = SERVICES.map(function (s, i) { return catPic(s, '(max-width:900px) 10px, 34vw', 'alt="" loading="lazy" decoding="async"' + (i ? '' : ' class="on"')); }).join('');
     showCat(0);
   }
   function showCat(i) {
@@ -363,8 +391,8 @@ var GALLERY = [
       return '<button class="chip" role="radio" aria-checked="' + (state.opt === i) + '" data-o="' + i + '">' + o.n + '<span class="cp">' + money(o.p) + (o.plus ? '+' : '') + '</span><span class="cd">' + o.d + '</span></button>';
     }).join('') : '';
     var add = '';
-    if (s && s.long) add += '<label class="check"><input type="checkbox" id="ad-long"' + (state.longHair ? ' checked' : '') + '>Length past butt length<b>+$15</b></label>';
-    if (s && state.opt != null && s.options[state.opt].design) add += '<label class="check"><input type="checkbox" id="ad-design"' + (state.design ? ' checked' : '') + '>Add a design<b>+$10</b></label>';
+    if (s && s.long) add += '<label class="check"><input type="checkbox" id="ad-long"' + (state.longHair ? ' checked' : '') + '>Length past butt length<b>+$' + CONFIG.longPrice + '</b></label>';
+    if (s && state.opt != null && s.options[state.opt].design) add += '<label class="check"><input type="checkbox" id="ad-design"' + (state.design ? ' checked' : '') + '>Add a design<b>+$' + CONFIG.designPrice + '</b></label>';
     $('#addons').innerHTML = add;
     rove($('#cat-chips'), '.chip'); rove($('#opt-chips'), '.chip');
   }
@@ -582,11 +610,14 @@ var GALLERY = [
     if (!LIVE.url || !LIVE.anonKey) return;
     var root = LIVE.url.replace(/\/+$/, '') + '/rest/v1/', opt = { headers: { apikey: LIVE.anonKey }, cache: 'no-store' };
     var get = function (q) { return fetch(root + q, opt).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }); };
+    var maybe = function (q) { return get(q).catch(function () { return null; }); }; // newer tables: fine if not set up yet
     Promise.all([
       get('price_options?select=service_id,name,price,duration,plus,design,design_duration,sort&order=service_id.asc,sort.asc&limit=500'),
-      get('gallery_photos?select=src,tag,caption,book,tall,width,height,hidden,sort&order=sort.asc&limit=500')
+      get('gallery_photos?select=src,tag,caption,book,tall,width,height,hidden,sort&order=sort.asc&limit=500'),
+      maybe('service_categories?select=id,name,description,long,photo,hidden,sort&order=sort.asc&limit=60'),
+      maybe('site_settings?select=deposit,long_price,design_price&limit=1')
     ]).then(function (r) {
-      var data = { prices: r[0], photos: r[1] }, sig = JSON.stringify(data);
+      var data = { prices: r[0], photos: r[1], cats: r[2], settings: r[3] && r[3][0] }, sig = JSON.stringify(data);
       if (sig === liveSig || !applyLive(data)) return;
       liveSig = sig;
       try { localStorage.setItem(LIVE_KEY, JSON.stringify({ url: LIVE.url, t: Date.now(), data: data })); } catch (e) {}
@@ -637,6 +668,42 @@ var GALLERY = [
   }
   loadInfo();
 
+  /* ── reviews Kenya pasted in from real clients (only the ones she shows) ── */
+  function loadReviews() {
+    if (!LIVE.url || !LIVE.anonKey) return;
+    fetch(LIVE.url.replace(/\/+$/, '') + '/rest/v1/reviews?select=name,body,stars,service,source&hidden=eq.false&order=sort.asc&limit=30', { headers: { apikey: LIVE.anonKey }, cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (list) {
+        var ul = $('#kind-list'); ul.textContent = '';
+        list.forEach(function (x) {
+          var body = clean(x.body, 400), name = clean(x.name, 40); if (!body || !name) return;
+          var li = el('li', 'kind-card'), st = Math.round(+x.stars);
+          if (st >= 1 && st <= 5) { var s = el('p', 'kind-stars', '\u2605\u2605\u2605\u2605\u2605'.slice(0, st)); s.setAttribute('aria-label', st + ' out of 5 stars'); li.appendChild(s); }
+          li.appendChild(el('blockquote', null, body));
+          var who = [name, clean(x.service, 40), clean(x.source, 20) ? 'via ' + clean(x.source, 20) : ''].filter(Boolean).join(' · ');
+          li.appendChild(el('p', 'kind-who', who));
+          ul.appendChild(li);
+        });
+        $('#reviews').hidden = !ul.children.length;
+        if (ul.children.length && window.__kdReveal) window.__kdReveal($$('.kind-card'));
+        if (window.ScrollTrigger) ScrollTrigger.refresh();
+      }).catch(function () { /* no reviews section */ });
+  }
+  loadReviews();
+
+  /* ── visit counts for Kenya's panel: one tally per day. No cookies, nothing about who visited. ── */
+  function track(kind) {
+    if (!LIVE.url || !LIVE.anonKey) return;
+    var k = 'kd-seen-' + kind + '-' + iso(new Date());
+    try { if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, '1'); } catch (e) {}
+    fetch(LIVE.url.replace(/\/+$/, '') + '/rest/v1/rpc/track_visit', { method: 'POST', headers: { apikey: LIVE.anonKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_kind: kind }), keepalive: true }).catch(function () {});
+  }
+  track('visit');
+  if ('IntersectionObserver' in window) {
+    var bookIO = new IntersectionObserver(function (es) { if (es.some(function (e) { return e.isIntersecting; })) { track('booking'); bookIO.disconnect(); } }, { threshold: 0.25 });
+    bookIO.observe($('#book'));
+  }
+
   $('#cal-prev').addEventListener('click', function () { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); renderCal(); calAnim(-1); });
   $('#cal-next').addEventListener('click', function () { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); renderCal(); calAnim(1); });
   function calAnim(dir) { if (hasGsap && !reduced) gsap.from('#cal-grid .day:not(.blank)', { opacity: 0, x: 10 * dir, duration: .35, stagger: .006, ease: 'power2.out' }); }
@@ -679,7 +746,7 @@ var GALLERY = [
   function total() {
     var s = svc(); if (!s || state.opt == null) return null;
     var o = s.options[state.opt];
-    return { base: o.p, plus: !!o.plus, sum: o.p + (state.longHair ? 15 : 0) + (state.design ? 10 : 0) };
+    return { base: o.p, plus: !!o.plus, sum: o.p + (state.longHair ? CONFIG.longPrice : 0) + (state.design ? CONFIG.designPrice : 0) };
   }
   function digits() { return $('#f-phone').value.replace(/\D/g, ''); }
   function setDD(id, text) { var el = $(id); el.textContent = text || el.dataset.empty; el.classList.toggle('empty', !text); }
@@ -776,8 +843,8 @@ var GALLERY = [
   }
   function message() {
     var s = svc(), o = s.options[state.opt], t = total(), adds = [];
-    if (state.longHair) adds.push('Past butt length (+$15)');
-    if (state.design) adds.push('Design (+$10)');
+    if (state.longHair) adds.push('Past butt length (+$' + CONFIG.longPrice + ')');
+    if (state.design) adds.push('Design (+$' + CONFIG.designPrice + ')');
     var lines = [
       'Hi Kenya! I would like to book an appointment.',
       '',
@@ -799,13 +866,15 @@ var GALLERY = [
 
   /* ── deposit (Stripe Payment Link: Apple Pay + card) ── */
   $('#pay-dep').addEventListener('click', function () {
-    var m = missing(true); if (m) return showErr(m);
+    var m = missing(false); if (m) return showErr(m);
     if (!CONFIG.depositLink) { toast('Online deposits turn on once Kenya connects her Stripe account.'); return; }
     save();
-    var ref = ($('#f-name').value.trim() + '_' + iso(state.date) + '_' + state.time).replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 190);
-    var url = CONFIG.depositLink + (CONFIG.depositLink.indexOf('?') > -1 ? '&' : '?') + 'client_reference_id=' + encodeURIComponent(ref);
-    this.disabled = true; this.setAttribute('aria-busy', 'true'); this.querySelector('.payb-l').textContent = 'Opening Stripe…';
-    window.location.href = url;
+    var btn = this; btn.disabled = true; btn.setAttribute('aria-busy', 'true'); btn.querySelector('.payb-l').textContent = 'Opening Stripe…';
+    // The request goes to Kenya's panel first. Its id rides along to Stripe, so the payment marks it paid.
+    saveRequest('deposit').then(function (id) {
+      var ref = id || ($('#f-name').value.trim() + '_' + iso(state.date) + '_' + state.time).replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 190);
+      window.location.href = CONFIG.depositLink + (CONFIG.depositLink.indexOf('?') > -1 ? '&' : '?') + 'client_reference_id=' + encodeURIComponent(ref);
+    });
   });
   /* coming back with the browser's back button: un-stick the pay button */
   addEventListener('pageshow', function (e) { if (e.persisted) update(); });
@@ -814,9 +883,11 @@ var GALLERY = [
      The text or DM is the request. When the calendar is live, a copy also goes to Kenya's booking list
      through submit_booking_request(), which checks the time is open and refuses floods. */
   var savedKey = null;
+  var savedId = null;
   function saveRequest(via) {
     var key = bookingKey() + '|' + digits();
-    if (!SB.url || !SB.anonKey || schedMode !== 'live' || savedKey === key) return;
+    if (!SB.url || !SB.anonKey || schedMode !== 'live') return Promise.resolve(null);
+    if (savedKey === key && !(via !== 'deposit' && state.paid)) return Promise.resolve(savedId);
     var s = svc(), t = total(), adds = [];
     if (state.longHair) adds.push('Past butt length'); if (state.design) adds.push('Design');
     var m = toMin(state.time), hhmm = String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
@@ -825,14 +896,19 @@ var GALLERY = [
       p_date: iso(state.date), p_time: hhmm, p_duration_min: durMin(), p_total: t.sum, p_total_plus: t.plus,
       p_notes: clean($('#f-notes').value, 400), p_paid_said: !!state.paid, p_sent_by: via, p_website: $('#f-web').value
     };
-    if (body.p_website) return; // bots fill the hidden field
-    fetch(SB.url.replace(/\/+$/, '') + '/rest/v1/rpc/submit_booking_request', {
+    if (body.p_website) return Promise.resolve(null); // bots fill the hidden field
+    return fetch(SB.url.replace(/\/+$/, '') + '/rest/v1/rpc/submit_booking_request', {
       method: 'POST', headers: { apikey: SB.anonKey, 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
-      savedKey = key;
+      return r.json();
+    }).then(function (id) {
+      savedKey = key; savedId = typeof id === 'string' ? id : null;
       if (state.sentKey === bookingKey()) $('#after-saved').hidden = false;
-    }).catch(function () { /* the text or DM still carries the request */ });
+      // Ping Kenya's phone. The server checks the request is new and alerts once.
+      if (savedId) fetch('/api/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: savedId }), keepalive: true }).catch(function () {});
+      return savedId;
+    }).catch(function () { return null; /* the text or DM still carries the request */ });
   }
   function markSent() { state.sentKey = bookingKey(); update(); }
   $('#send-text').addEventListener('click', function () {

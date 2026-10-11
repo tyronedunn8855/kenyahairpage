@@ -27,7 +27,7 @@ function build(q) {
     clean(q.get('addons'), 60) && 'Add-ons: ' + clean(q.get('addons'), 60),
     /^\d{1,4}$/.test(q.get('total') || '') && 'Estimated total: $' + q.get('total') + (q.get('plus') === '1' ? '+' : ''),
     phone.length === 10 && 'Phone: (' + phone.slice(0, 3) + ') ' + phone.slice(3, 6) + '-' + phone.slice(6),
-    q.get('paid') === '1' ? 'Client said the $15 deposit is paid. Check Stripe.' : 'Deposit: not marked paid.',
+    q.get('paid') === '2' ? 'Deposit: paid.' : q.get('paid') === '1' ? 'Client said the deposit is paid. Check Stripe.' : 'Deposit: not marked paid.',
     clean(q.get('notes'), 400) && 'Notes: ' + clean(q.get('notes'), 400),
     'Booked through your ken.didit site.'
   ].filter(Boolean);
@@ -35,7 +35,7 @@ function build(q) {
   const ev = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ken.didit//owner panel//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
     ...CHI,
-    'BEGIN:VEVENT', 'UID:' + id + '@ken.didit', 'DTSTAMP:' + stamp, 'SEQUENCE:0',
+    'BEGIN:VEVENT', 'UID:' + id + '@ken.didit', 'DTSTAMP:' + stamp, 'SEQUENCE:' + (/^\d{1,10}$/.test(q.get('seq') || '') ? q.get('seq') : '0'),
     'DTSTART;TZID=America/Chicago:' + local(start), 'DTEND;TZID=America/Chicago:' + local(end),
     'STATUS:CONFIRMED', 'TRANSP:OPAQUE',
     'SUMMARY:' + esc(name + (style ? ': ' + style : '')),
